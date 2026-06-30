@@ -42,19 +42,21 @@ LoRa 게이트웨이가 각 노드에 변경분만 전송한다. 노드는 e-Pap
 | e-Paper | GxEPD2 + Adafruit_GFX (부분갱신) |
 | QR | ricmoo/QRCode (온디바이스 렌더) |
 | 저전력/저장 | esp_deep_sleep + LittleFS |
-| 서버 | FastAPI + APScheduler + SQLite + pyserial |
+| 서버 | FastAPI + pyserial + 메모리/JSON 상태 + APScheduler(인메모리 예약) |
+| 서버 영속(선택) | SQLite — 시계열 이력(배터리 추이·성공률·누적 종이절감) 필요 시만 |
 | 프론트 | Vue 3 + Vite + Pinia |
 
 ## 5. 역할 분담
 | 담당 | 브랜치 | 영역 |
 |------|------|------|
 | 우진(팀장) | `wj` | 시스템 통합 + 게이트웨이 펌웨어 + 패킷 프로토콜 |
-| 준표 | `jp` | 서버·대시보드(FastAPI+Vue) + 시리얼 브리지 + DB·예약 |
+| 준표 | `jp` | 서버·대시보드(FastAPI+Vue) + 시리얼 브리지 + 상태·예약(메모리+JSON) |
 | 효민 | `hm` | 노드 펌웨어 — e-Paper 렌더 + QR + 딥슬립 + 배터리 |
 
 ## 6. MVP 범위
 텍스트 + QR / 2노드 / 일괄·개별 배포 / ACK·재전송 / 배터리 보고.
-이미지 분할 전송, Wi-Fi 게이트웨이는 스트레치.
+서버 상태는 **메모리+JSON**(DB 없음).
+이미지 분할 전송, Wi-Fi 게이트웨이, SQLite 시계열 이력은 스트레치.
 
 ## 7. 정량 목표
 - 2개 노드 동시 제어(일괄·개별)
