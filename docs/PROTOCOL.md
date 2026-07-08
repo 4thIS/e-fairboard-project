@@ -51,6 +51,33 @@
 | 0x30 | STATUS_REQ | GW→Node | 없음 |
 | 0x31 | STATUS_RES | Node→GW | batt_mV(2), last_seq(1), uptime_s(2), err_cnt(1) |
 
+### 3.1 PAYLOAD 바이트 배치 (확정 — 전부 little-endian)
+
+멀티바이트 필드는 전부 **little-endian**(§2 CRC16 wire 인코딩 포함).
+서버(Python `struct`)와 펌웨어(C 구조체)가 동일 배치를 사용한다.
+C 측은 `__attribute__((packed))` 필수 — 패딩이 끼면 배치가 어긋난다.
+
+| 메시지 | 배치 | Python struct | 크기 |
+|---|---|---|:---:|
+| PONG | batt_mV u16 · rssi i8 · status u8 | `<HbB` | 4B |
+| ACK | ack_seq u8 · result u8 | `<BB` | 2B |
+| STATUS_RES | batt_mV u16 · last_seq u8 · uptime_s u16 · err_cnt u8 | `<HBHB` | 6B |
+| SET_TEMPLATE | template_id u8 | `<B` | 1B |
+| SET_FIELD | field_id u8 · text_len u8 · UTF-8 text(≤198B) | - | 2+nB |
+| SET_QR | qr_slot u8 · url_len u8 · URL text | - | 2+nB |
+| COMMIT | refresh_mode u8 (0=부분, 1=전체) | `<B` | 1B |
+
+예) PONG(batt 3900mV, rssi -60dBm, status 0) → `3C 0F C4 00`
+
+C 참조 구조체:
+```c
+typedef struct __attribute__((packed)) {
+    uint16_t batt_mv;   // little-endian (ESP32 기본)
+    int8_t   rssi;
+    uint8_t  status;
+} pong_payload_t;
+```
+
 ## 4. 게시물 업데이트 시퀀스 (템플릿 기반)
 ```
 GW→Node : SET_TEMPLATE(id)            (템플릿 바뀔 때만)   →  ACK
@@ -102,5 +129,5 @@ GW→Node : COMMIT(refresh_mode)        e-Paper 실제 갱신   →  ACK(OK)
 ## 10. 미정·TODO
 - [ ] KR920 법정 TX 출력 한도 수치 확정
 - [ ] 한글 비트맵 폰트(나눔/Galmuri) e-Paper 적용 방식
-- [ ] SEQ 롤오버(0xFF→0x00) 규칙 명문화
-- [ ] 구조체 바이트 정렬·엔디안 명시(little-endian 권장)
+- [x] SEQ 롤오버 — 노드별 독립 SEQ, 0xFF→0x00 순환 (서버 구현 확정, 2026-07-08)
+- [x] 구조체 바이트 정렬·엔디안 — little-endian 확정, §3.1에 배치 명문화 (2026-07-08)

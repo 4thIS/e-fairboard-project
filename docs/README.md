@@ -20,7 +20,7 @@ LoRa 기반 중앙제어 e-Paper 전시/게시 팜플렛 시스템 — 설계 �
 ```
 gateway/   # ESP32 게이트웨이 펌웨어 (RadioLib + USB 시리얼)
 node/      # ESP32 노드 펌웨어 (RadioLib + GxEPD2 + 딥슬립)
-server/    # FastAPI 서버 + Vue 대시보드 (시리얼 브리지, SQLite, 예약)
+server/    # FastAPI 서버 + Vue 대시보드 (시리얼 브리지, 메모리+JSON, 인메모리 예약)
 docs/      # 설계 문서 (본 폴더)
 ```
 
