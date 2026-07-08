@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from .auth import TokenRegistry
 from .config import Settings, get_settings
 from .routers import auth as auth_router
+from .routers import posts as posts_router
 from .simulator.rig import NODE_IDS, SimRig
 from .store import Store
 
@@ -35,4 +36,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="E-FairBoard Server", lifespan=lifespan)
     app.include_router(auth_router.router)
+    app.include_router(posts_router.router)
     return app
