@@ -1,0 +1,32 @@
+# --- 비밀/자격증명 (CLAUDE.md 협업 헌법: 커밋 금지) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python (server/backend) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# 런타임 상태 스냅샷 (메모리+JSON 저장소)
+data/
+*.state.json
+state.json
+state.json.bak
+state.json.tmp
+
+# --- Node / 프론트엔드 (server/frontend) ---
+node_modules/
+dist/
+.vite/
+
+# --- 에디터/OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
