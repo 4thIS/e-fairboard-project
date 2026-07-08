@@ -10,7 +10,9 @@ from .routers import auth as auth_router
 from .routers import deployments as deployments_router
 from .routers import nodes as nodes_router
 from .routers import posts as posts_router
+from .routers import schedules as schedules_router
 from .routers import sim as sim_router
+from .services.schedule_service import ScheduleService
 from .simulator.rig import NODE_IDS, SimRig
 from .store import Store
 
@@ -46,7 +48,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         else:  # serial 모드 — 하드웨어 전환 계획(스펙 §10)에서 구현
             app.state.rig = None
         store.save()
+        schedule_service = ScheduleService(store, app.state.rig)
+        schedule_service.start()
+        app.state.schedule_service = schedule_service
         yield
+        schedule_service.shutdown()
         if app.state.rig is not None:
             await app.state.rig.stop()
         store.save()
@@ -57,4 +63,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(nodes_router.router)
     app.include_router(sim_router.router)
     app.include_router(deployments_router.router)
+    app.include_router(schedules_router.router)
     return app
