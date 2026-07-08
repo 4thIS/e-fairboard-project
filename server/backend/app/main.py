@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from .auth import TokenRegistry
 from .config import Settings, get_settings
@@ -73,4 +74,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(deployments_router.router)
     app.include_router(schedules_router.router)
     app.include_router(stats_router.router)
+
+    dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if dist.exists():  # 프론트 빌드 산출물이 있으면 단일 프로세스 데모 (스펙 §3)
+        app.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
     return app
