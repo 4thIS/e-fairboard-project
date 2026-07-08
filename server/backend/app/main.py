@@ -12,6 +12,8 @@ from .routers import nodes as nodes_router
 from .routers import posts as posts_router
 from .routers import schedules as schedules_router
 from .routers import sim as sim_router
+from .routers import stats as stats_router
+from .services.node_service import NodeMonitor
 from .services.schedule_service import ScheduleService
 from .simulator.rig import NODE_IDS, SimRig
 from .store import Store
@@ -51,7 +53,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         schedule_service = ScheduleService(store, app.state.rig)
         schedule_service.start()
         app.state.schedule_service = schedule_service
+        monitor = NodeMonitor(store, app.state.rig,
+                              interval_s=settings.status_poll_interval_s)
+        if app.state.rig is not None:
+            await monitor.start()
+        app.state.node_monitor = monitor
         yield
+        await monitor.stop()
         schedule_service.shutdown()
         if app.state.rig is not None:
             await app.state.rig.stop()
@@ -64,4 +72,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sim_router.router)
     app.include_router(deployments_router.router)
     app.include_router(schedules_router.router)
+    app.include_router(stats_router.router)
     return app
