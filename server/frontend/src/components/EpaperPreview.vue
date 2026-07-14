@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
 import QRCode from 'qrcode'
-import { clip, advanceOf, GLYPH_CELL } from '../epaper/text'
+import { clip, advanceOf, scaleFor, GLYPH_CELL } from '../epaper/text'
 import { CANVAS_W, CANVAS_H, type TemplateDef } from '../epaper/types'
 
 const props = withDefaults(defineProps<{
@@ -10,11 +10,6 @@ const props = withDefaults(defineProps<{
   qrUrl?: string
   scale?: number
 }>(), { qrUrl: '', scale: 2 })
-
-/** 노드 scale_for 과 동일 — 정수 내림, 최소 x1 (node_core/layout.cpp). */
-function scaleFor(fontPx: number): number {
-  return Math.max(1, Math.floor(fontPx / GLYPH_CELL))
-}
 
 /** 미리보기 전체 배율. 소수/0 배율은 픽셀 정합을 깨므로 같은 규칙을 적용한다. */
 const previewScale = computed(() => Math.max(1, Math.floor(props.scale)))

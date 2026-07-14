@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { advanceOf, isRenderable, measure, clip, utf8Bytes } from './text'
+import { advanceOf, isRenderable, measure, clip, utf8Bytes, scaleFor } from './text'
 
 describe('advanceOf — ASCII 반각 8px, 한글 전각 16px', () => {
   it('ASCII 는 8px', () => expect(advanceOf('A')).toBe(8))
@@ -68,4 +68,13 @@ describe('utf8Bytes — 서버 max_bytes 검증과 같은 기준', () => {
   it('한글은 3바이트', () => expect(utf8Bytes('가')).toBe(3))
   it('ASCII 는 1바이트', () => expect(utf8Bytes('A')).toBe(1))
   it('혼합', () => expect(utf8Bytes('가A')).toBe(4))
+})
+
+describe('scaleFor — 노드 scale_for 과 동일 (node_core/layout.cpp)', () => {
+  it('16 -> 1', () => expect(scaleFor(16)).toBe(1))
+  it('32 -> 2', () => expect(scaleFor(32)).toBe(2))
+  it('16 미만은 내림하면 0 이 되지만 최소 x1 로 막는다 — 글자가 사라지면 안 된다', () => {
+    expect(scaleFor(12)).toBe(1)
+    expect(scaleFor(0)).toBe(1)
+  })
 })
