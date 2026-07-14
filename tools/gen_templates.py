@@ -5,6 +5,7 @@ PROTOCOL.md §8: "좌표·폰트는 펌웨어 상수 → 서버는 값만 전송
 손으로 옮겨 적으면 반드시 어긋나므로 생성한다.
 
 실행: ~/venv/bin/python tools/gen_templates.py
+      ~/venv/bin/python tools/gen_templates.py --check   # 드리프트 검사 (CI)
 출력: node/lib/node_core/include/node/templates.h
 """
 
@@ -19,7 +20,7 @@ from app.protocol.templates import TEMPLATES
 OUT = ROOT / "node" / "lib" / "node_core" / "include" / "node" / "templates.h"
 
 
-def main() -> None:
+def render() -> str:
     max_fields = max(len(t.fields) for t in TEMPLATES.values())
 
     lines = [
@@ -93,8 +94,28 @@ def main() -> None:
         "",
     ]
 
+    return "\n".join(lines)
+
+
+def main() -> None:
+    content = render()
+
+    # 드리프트 가드 — 생성물이 소스와 어긋나면 실패한다.
+    # templates.py 만 고치고 templates.h 재생성을 잊으면 펌웨어가 옛 좌표·폰트로 그린다.
+    # 아무 테스트도 안 깨지므로 여기서 잡지 않으면 화면이 잘린 뒤에야 안다 (이슈 #12).
+    if "--check" in sys.argv:
+        if not OUT.exists():
+            sys.exit(f"FAIL {OUT.relative_to(ROOT)} 가 없습니다. gen_templates.py 를 실행하세요.")
+        if OUT.read_text(encoding="utf-8") != content:
+            sys.exit(
+                f"FAIL {OUT.relative_to(ROOT)} 가 templates.py 와 어긋납니다.\n"
+                f"     python tools/gen_templates.py 를 실행하고 커밋하세요."
+            )
+        print(f"OK   {OUT.relative_to(ROOT)} — templates.py 와 일치")
+        return
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text("\n".join(lines), encoding="utf-8")
+    OUT.write_text(content, encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}  ({len(TEMPLATES)} templates)")
 
 
