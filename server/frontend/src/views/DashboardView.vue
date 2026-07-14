@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import AppShell from '../components/AppShell.vue'
 import NodeCard from '../components/NodeCard.vue'
+import EditDialog from '../components/EditDialog.vue'
 import { useNodes } from '../stores/nodes'
 import { usePosts } from '../stores/posts'
 import type { NodeInfo } from '../api'
@@ -17,9 +18,8 @@ onMounted(() => {
 })
 onUnmounted(() => nodes.stopPolling())
 
-function openEdit(_node: NodeInfo) {
-  // Task 6 에서 EditDialog 연결
-}
+const editing = ref<NodeInfo | null>(null)
+function openEdit(node: NodeInfo) { editing.value = node }
 </script>
 
 <template>
@@ -27,6 +27,7 @@ function openEdit(_node: NodeInfo) {
     <div class="grid">
       <NodeCard v-for="n in nodes.list" :key="n.id" :node="n" @edit="openEdit" />
     </div>
+    <EditDialog v-if="editing" :node="editing" @close="editing = null" />
   </AppShell>
 </template>
 
