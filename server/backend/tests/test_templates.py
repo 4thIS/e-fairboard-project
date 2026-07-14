@@ -1,4 +1,4 @@
-from app.protocol.templates import TEMPLATES, as_dict
+from app.protocol.templates import TEMPLATES, as_dict, field_avail_w
 
 
 def test_four_templates_defined():
@@ -34,9 +34,8 @@ def test_max_bytes_fits_screen_width():
     """
     for tpl in TEMPLATES.values():
         for f in tpl.fields:
-            overlaps_qr = f.y < tpl.qr.y + tpl.qr.size and tpl.qr.y < f.y + f.font_size
-            avail = (tpl.qr.x if overlaps_qr else 296) - f.x
-            width = (f.max_bytes // 3) * f.font_size  # 한글 최악
+            avail = field_avail_w(f, tpl.qr)
+            width = (f.max_bytes // 3) * f.font_size
             assert width <= avail, (
                 f"{tpl.name}/{f.name}: {f.max_bytes}B → {width}px > 가용 {avail}px")
 
@@ -53,3 +52,27 @@ def test_as_dict_is_json_shape():
     assert len(data) == 4
     assert data[0]["fields"][0]["name"]
     assert {"x", "y", "size"} <= set(data[0]["qr"].keys())
+
+
+def test_field_avail_w_shrinks_only_for_rows_overlapping_qr():
+    tpl = TEMPLATES[0]  # 행사 안내, QR(224, 32, 64)
+    title, when = tpl.fields[0], tpl.fields[1]
+    # 제목 y=8, 16px → 8~24. QR은 y 32~96 → 안 겹침 → 캔버스 끝까지
+    assert field_avail_w(title, tpl.qr) == 296 - 8
+    # 일시 y=48, 16px → 48~64. QR과 겹침 → QR 앞까지
+    assert field_avail_w(when, tpl.qr) == 224 - 8
+
+
+def test_template3_qr_is_higher_so_different_rows_overlap():
+    tpl = TEMPLATES[3]  # 일정표, QR(240, 8, 48) → y 8~56
+    date, s1, s2 = tpl.fields[0], tpl.fields[1], tpl.fields[2]
+    assert field_avail_w(date, tpl.qr) == 240 - 8   # y 8~24  겹침
+    assert field_avail_w(s1, tpl.qr) == 240 - 8     # y 44~60 겹침
+    assert field_avail_w(s2, tpl.qr) == 296 - 8     # y 72~88 안 겹침
+
+
+def test_as_dict_carries_avail_w():
+    data = as_dict()
+    fields = data[0]["fields"]
+    assert fields[0]["avail_w"] == 288
+    assert fields[1]["avail_w"] == 216
