@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import EpaperPreview from './EpaperPreview.vue'
-import { clip, utf8Bytes } from '../epaper/text'
+import { clip, utf8Bytes, scaleFor } from '../epaper/text'
 import type { TemplateDef } from '../epaper/types'
 import type { Post } from '../api'
 
@@ -20,24 +20,28 @@ const tpl = computed(() => props.templates.find(t => t.id === form.template_id) 
 // 템플릿을 바꾸면 이전 템플릿의 필드는 서버가 422로 거절한다 — 미리 비운다.
 watch(() => form.template_id, () => { form.fields = {} })
 
-/** 필드마다 두 가지를 본다: 바이트 초과(서버가 막음) / 픽셀 초과(노드가 잘라냄). */
+/** 필드마다 두 가지를 본다: 바이트 초과(서버가 막음) / 픽셀 초과(노드가 잘라냄).
+ *  kind 가 실제 판단 근거다 — message 는 kind 에서 파생될 뿐, 거꾸로 message 를
+ *  파싱해 kind 를 알아내지 않는다(문구를 바꾸면 저장 차단이 조용히 깨지는 사고를 막는다). */
+type Issue = { kind: 'byte' | 'pixel'; message: string }
+
 const issues = computed(() => {
-  if (!tpl.value) return {} as Record<number, string>
-  const out: Record<number, string> = {}
+  if (!tpl.value) return {} as Record<number, Issue>
+  const out: Record<number, Issue> = {}
   for (const f of tpl.value.fields) {
     const text = form.fields[String(f.id)] ?? ''
     if (!text) continue
     if (utf8Bytes(text) > f.max_bytes) {
-      out[f.id] = `${f.max_bytes}바이트를 넘습니다 — 저장할 수 없습니다`
-    } else if (clip(text, f.avail_w, f.font_size / 16).clipped) {
-      out[f.id] = '화면에서 잘립니다'   // 저장은 되지만 노드가 잘라 그린다
+      out[f.id] = { kind: 'byte', message: `${f.max_bytes}바이트를 넘습니다 — 저장할 수 없습니다` }
+    } else if (clip(text, f.avail_w, scaleFor(f.font_size)).clipped) {
+      out[f.id] = { kind: 'pixel', message: '화면에서 잘립니다' }   // 저장은 되지만 노드가 잘라 그린다
     }
   }
   return out
 })
 
 const blocked = computed(() =>
-  Object.values(issues.value).some(m => m.includes('저장할 수 없습니다')))
+  Object.values(issues.value).some(i => i.kind === 'byte'))
 </script>
 
 <template>
@@ -52,7 +56,7 @@ const blocked = computed(() =>
       <div v-for="f in tpl?.fields ?? []" :key="f.id" class="field">
         <label>{{ f.name }}</label>
         <el-input v-model="form.fields[String(f.id)]" />
-        <p v-if="issues[f.id]" class="warn">⚠ {{ issues[f.id] }}</p>
+        <p v-if="issues[f.id]" class="warn">⚠ {{ issues[f.id].message }}</p>
         <p v-else class="hint">
           {{ utf8Bytes(form.fields[String(f.id)] ?? '') }} / {{ f.max_bytes }}바이트
         </p>

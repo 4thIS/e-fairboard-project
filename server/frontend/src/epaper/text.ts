@@ -9,6 +9,12 @@
 
 export const GLYPH_CELL = 16
 
+/** 노드 scale_for 과 동일 — 정수 내림, 최소 x1 (node_core/layout.cpp).
+ *  16 미만이면 0 이 되어 글자가 통째로 사라지므로 최소 x1 로 막는다. */
+export function scaleFor(fontPx: number): number {
+  return Math.max(1, Math.floor(fontPx / GLYPH_CELL))
+}
+
 /** 폰트에 있는 글자인가. ASCII(0x20~0x7E) + 완성형 한글(U+AC00~U+D7A3). */
 export function isRenderable(ch: string): boolean {
   const cp = ch.codePointAt(0)
