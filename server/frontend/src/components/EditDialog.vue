@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { NodeInfo, Post } from '../api'
+import { errorMessage } from '../api/client'
 import { clip, scaleFor, utf8Bytes } from '../epaper/text'
 import type { FieldDef } from '../epaper/types'
 import { useDeployments } from '../stores/deployments'
@@ -84,8 +85,8 @@ async function save() {
     const saved = await posts.save(postChoice.value === 'new' ? null : postChoice.value, body)
     await deployments.deployToNode(saved, props.node.id, refreshMode.value)
     emit('close')
-  } catch {
-    error.value = '✕ 저장/배포 요청 실패 — 입력을 확인하세요'
+  } catch (e) {
+    error.value = errorMessage(e, '인증이 만료되었습니다 — 다시 로그인하세요')
   } finally {
     busy.value = false
   }
