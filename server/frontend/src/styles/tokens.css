@@ -1,0 +1,59 @@
+/* 스펙: docs/web/2026-07-14-web-visual-design.md §3~§5
+ * e-Paper 가 못 하는 것은 대시보드도 하지 않는다 — 그림자·그라데이션·안티에일리어싱 없음. */
+
+@font-face {
+  font-family: 'NeoDunggeunmo';
+  src: url('/fonts/NeoDunggeunmo.woff2') format('woff2');
+  font-display: block;   /* 픽셀 폰트는 폴백으로 대체되면 레이아웃이 깨진다 */
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('/fonts/Pretendard-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Pretendard';
+  src: url('/fonts/Pretendard-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --ink:      #1A1A1A;   /* 텍스트·기본 모든 것 */
+  --paper:    #FFFFFF;   /* 카드·미리보기 바탕 */
+  --paper-bg: #F5F4F0;   /* 페이지 배경 */
+  --epd-red:  #C8302A;   /* 경고·실패·오프라인·저배터리 — 오직 이것만 */
+
+  --ink-60:   #6B6B6B;   /* 보조 텍스트 (5.33:1, AA 통과) */
+  --ink-40:   #8A8A8A;   /* 조작 가능한 것의 테두리 (3.45:1). 텍스트 금지 */
+  --rule:     #D4D4D0;   /* 장식선 전용 (1.49:1). 테두리 금지 */
+  --fill:     #EEEDE9;   /* 비활성 배경·게이지 트랙 */
+
+  --sp: 8px;             /* 간격 단위 — 16의 절반 */
+}
+
+* { box-shadow: none !important; }   /* e-Paper 에는 그림자가 없다 */
+
+body {
+  margin: 0;
+  background: var(--paper-bg);
+  color: var(--ink);
+  font-family: 'Pretendard', system-ui, sans-serif;
+  font-size: 14px;
+}
+
+/* 픽셀 폰트 — 16의 정수배에서만 선명하다. 보간을 끈다. */
+.pix {
+  font-family: 'NeoDunggeunmo', monospace;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  font-smooth: never;
+}
+.pix-16 { font-size: 16px; line-height: 16px; }
+.pix-32 { font-size: 32px; line-height: 32px; }
+.pix-48 { font-size: 48px; line-height: 48px; }
+.pix-64 { font-size: 64px; line-height: 64px; }
+
+/* 포커스는 테두리로만 드러난다 — 그림자를 없앴으므로 */
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
