@@ -77,4 +77,11 @@ describe('scaleFor — 노드 scale_for 과 동일 (node_core/layout.cpp)', () =
     expect(scaleFor(12)).toBe(1)
     expect(scaleFor(0)).toBe(1)
   })
+  // 올림이면 24 -> 2 (=32px) 가 되어 글자가 잘린다. 펌웨어에서 실제로 터졌던 버그다:
+  // "임베디드 SW 경진대회" 의 뒤가 날아갔다 (node_core/layout.h, test_layout 이 같은 케이스를 못 박는다).
+  // 16/32 만 쓰는 지금은 안 터지지만, 반올림 방향은 이 파일이 지켜야 할 계약이다.
+  it('24 -> 1 — 1.5 를 올림하지 않는다 (올리면 32px 로 그려서 잘린다)', () => {
+    expect(scaleFor(24)).toBe(1)
+    expect(scaleFor(20)).toBe(1)
+  })
 })
