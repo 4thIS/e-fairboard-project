@@ -101,6 +101,19 @@ def test_running_deployment_marked_failed_on_boot(tmp_path):
     assert dep["targets"][0]["error"] == "interrupted"
 
 
+def test_deploy_reports_step_progress(client, auth_headers):
+    pid = make_post(client, auth_headers)
+    res = client.post("/api/deployments",
+                      json={"post_id": pid, "node_ids": [1], "refresh_mode": 0},
+                      headers=auth_headers)
+    dep = wait_deployment(client, auth_headers, res.json()["id"])
+    t = dep["targets"][0]
+    # VALID_POST = 필드 2 + QR → SET_TEMPLATE + SET_FIELD×2 + SET_QR + COMMIT = 5
+    assert t["step_total"] == 5
+    assert t["step_index"] == 5          # 마지막 단계까지 진행
+    assert t["step_name"] == "COMMIT"
+
+
 def test_deployment_list_ordering(client, auth_headers):
     pid = make_post(client, auth_headers)
     ids = []
