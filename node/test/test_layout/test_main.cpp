@@ -63,8 +63,38 @@ void test_no_field_can_exceed_canvas() {
     }
 }
 
+// 글립은 16x16 하나뿐이라 정수 배율만 가능하다. templates.py 는 16/32px 만 쓴다 (이슈 #12).
+void test_scale_is_font_size_over_cell() {
+    TEST_ASSERT_EQUAL_UINT8(1, node::scale_for(16));
+    TEST_ASSERT_EQUAL_UINT8(2, node::scale_for(32));
+}
+
+// 정수 배율이 안 되는 크기는 내림한다 — 넘쳐서 잘리는 것보다 작게 그리는 게 낫다.
+// 16 미만은 0 이 되어 글자가 통째로 사라지므로 최소 x1 로 막는다.
+// templates.py 가 16/32 만 쓰므로 실전에선 안 밟히지만, 값이 어긋나도 화면이 비지는 않는다.
+void test_non_multiple_font_size_rounds_down_never_to_zero() {
+    TEST_ASSERT_EQUAL_UINT8(1, node::scale_for(24));  // 1.5 -> 1 (예전엔 2 로 올려 잘렸다)
+    TEST_ASSERT_EQUAL_UINT8(1, node::scale_for(12));  // 0.75 -> 0 이면 안 되고 1
+    TEST_ASSERT_EQUAL_UINT8(1, node::scale_for(0));
+}
+
+// 실제 템플릿이 쓰는 크기는 전부 16 의 정수배여야 한다 — 어긋나면 글자가 작아진다.
+void test_all_template_font_sizes_are_exact_multiples() {
+    for (size_t t = 0; t < node::TEMPLATE_COUNT; ++t) {
+        const node::TemplateDef& tpl = node::TEMPLATES[t];
+        for (uint8_t i = 0; i < tpl.field_count; ++i) {
+            const uint8_t fs = tpl.fields[i].font_size;
+            TEST_ASSERT_EQUAL_UINT8(0, fs % node::GLYPH_CELL);
+            TEST_ASSERT_GREATER_THAN_UINT8(0, node::scale_for(fs));
+        }
+    }
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_scale_is_font_size_over_cell);
+    RUN_TEST(test_non_multiple_font_size_rounds_down_never_to_zero);
+    RUN_TEST(test_all_template_font_sizes_are_exact_multiples);
     RUN_TEST(test_row_overlapping_qr_stops_at_qr);
     RUN_TEST(test_row_above_qr_uses_full_width);
     RUN_TEST(test_row_below_qr_uses_full_width);

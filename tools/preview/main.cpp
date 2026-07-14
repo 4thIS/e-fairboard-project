@@ -81,23 +81,13 @@ private:
     uint8_t px_[node::CANVAS_H][node::CANVAS_W] = {};
 };
 
-// 글립은 16x16 하나. 24px 이상 필드가 남아 있으면 x2 로 그린다.
-// 이슈 #12에서 우진이 templates.py 를 16px 단일로 정리하기로 했으므로, 그 뒤엔 항상 x1 이다.
-// FORCE_16 은 그 변경을 미리 적용해본 결과를 보기 위한 스위치다.
-uint8_t scale_for(uint8_t font_px, bool force16) {
-    if (force16) return 1;
-    return font_px >= 24 ? 2 : 1;
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: preview <font.bin> <outdir> [--force16]\n");
+        fprintf(stderr, "usage: preview <font.bin> <outdir>\n");
         return 1;
     }
-    const bool force16 = argc > 3 && strcmp(argv[3], "--force16") == 0;
-
     FileFont font;
     if (!font.load(argv[1])) {
         fprintf(stderr, "폰트를 읽을 수 없습니다: %s\n", argv[1]);
@@ -123,8 +113,8 @@ int main(int argc, char** argv) {
             const char* text = content[t][i];
             if (!text) continue;
 
-            const uint8_t scale = scale_for(f.font_size, force16);
-            // QR과 세로로 겹치는 행만 폭이 줄어든다 — 펌웨어와 같은 규칙 (node_core/layout.cpp)
+            // 배율·가용폭 모두 펌웨어와 같은 코드를 쓴다 (node_core/layout.cpp)
+            const uint8_t scale = node::scale_for(f.font_size);
             const int16_t avail = node::field_avail_w(f, tpl.qr, scale);
             const int16_t drawn = node::draw_utf8(bmp, font, f.x, f.y, text, scale, avail);
 
