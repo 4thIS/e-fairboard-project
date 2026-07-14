@@ -1,0 +1,90 @@
+<script setup lang="ts">
+import { computed, ref, watchEffect } from 'vue'
+import QRCode from 'qrcode'
+import { clip, advanceOf, isRenderable } from '../epaper/text'
+import { CANVAS_W, CANVAS_H, type TemplateDef } from '../epaper/types'
+
+const props = withDefaults(defineProps<{
+  template: TemplateDef | null
+  fields: Record<string, string>
+  qrUrl?: string
+  scale?: number
+}>(), { qrUrl: '', scale: 2 })
+
+/** 필드별로 노드와 같은 규칙으로 잘라낸다. 잘렸으면 부모에게 알린다. */
+const rows = computed(() => {
+  if (!props.template) return []
+  return props.template.fields.map((f) => {
+    const raw = props.fields[String(f.id)] ?? ''
+    const s = f.font_size / 16          // 16 → 1, 32 → 2 (노드 scale_for 과 동일)
+    const { text, clipped } = clip(raw, f.avail_w, s)
+    return { f, s, clipped, chars: [...text].filter(isRenderable) }
+  })
+})
+
+/** QR — 노드와 같은 버전 선택(ECC L, 길이별). 담을 수 없으면 그리지 않는다. */
+const qrCanvas = ref<HTMLCanvasElement | null>(null)
+watchEffect(async () => {
+  const c = qrCanvas.value
+  if (!c || !props.template || !props.qrUrl) return
+  const len = new TextEncoder().encode(props.qrUrl).length
+  if (len > 192) return                        // 노드도 이 경우 안 그린다
+  const version = len > 106 ? 8 : len > 53 ? 5 : 3
+  await QRCode.toCanvas(c, props.qrUrl, {
+    errorCorrectionLevel: 'L', version, margin: 0,
+    scale: 1, color: { dark: '#1A1A1A', light: '#FFFFFF' },
+  })
+})
+</script>
+
+<template>
+  <div
+    class="epd"
+    :style="{ width: CANVAS_W * scale + 'px', height: CANVAS_H * scale + 'px' }"
+    role="img"
+    :aria-label="template
+      ? `${template.name}: ` + rows.map(r => `${r.f.name} ${r.chars.join('')}`).join(', ')
+      : '표시 내용 없음'"
+  >
+    <div
+      class="inner"
+      :style="{ width: CANVAS_W + 'px', height: CANVAS_H + 'px',
+                transform: `scale(${scale})` }"
+    >
+      <div
+        v-for="r in rows" :key="r.f.id"
+        class="row pix"
+        :style="{ left: r.f.x + 'px', top: r.f.y + 'px',
+                  fontSize: r.f.font_size + 'px', lineHeight: r.f.font_size + 'px' }"
+      >
+        <!-- 글자마다 폭을 명시한다 — 브라우저 폰트 메트릭에 기대지 않는다.
+             우리가 잰 폭이 곧 레이아웃이라 text.spec.ts 가 화면을 보장한다. -->
+        <span
+          v-for="(ch, i) in r.chars" :key="i"
+          class="g"
+          :style="{ width: advanceOf(ch) * r.s + 'px' }"
+        >{{ ch }}</span>
+      </div>
+
+      <canvas
+        v-if="template && qrUrl"
+        ref="qrCanvas"
+        class="qr"
+        :style="{ left: template.qr.x + 'px', top: template.qr.y + 'px',
+                  width: template.qr.size + 'px', height: template.qr.size + 'px' }"
+      />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.epd {
+  background: var(--paper);
+  border: 1px solid var(--ink);   /* e-Paper 패널의 테두리 */
+  overflow: hidden;
+}
+.inner { position: relative; transform-origin: top left; }
+.row { position: absolute; white-space: nowrap; color: var(--ink); }
+.g { display: inline-block; overflow: hidden; }
+.qr { position: absolute; image-rendering: pixelated; }
+</style>
