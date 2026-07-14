@@ -1,0 +1,8 @@
+{
+  "name": "node_core",
+  "version": "0.1.0",
+  "description": "e-Paper 노드 상태머신 — 스테이징/COMMIT/멱등. 하드웨어 의존 없음.",
+  "dependencies": {"efb_protocol": "*"},
+  "frameworks": "*",
+  "platforms": "*"
+}
