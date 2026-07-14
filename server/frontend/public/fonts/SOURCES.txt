@@ -1,9 +1,0 @@
-이 폴더의 글꼴은 모두 SIL Open Font License 1.1 이다. 라이선스 원문은 저장소 루트 assets/OFL.txt 참고.
-
-- NeoDunggeunmo.woff2
-  Neo둥근모 — 노드 펌웨어(assets/efb_hangul16.bin)가 래스터라이즈에 사용한 바로 그 폰트.
-  https://github.com/neodgm/neodgm/releases/latest/download/neodgm.woff2
-
-- Pretendard-Regular.woff2 / Pretendard-Bold.woff2
-  https://github.com/orioncactus/pretendard/raw/main/packages/pretendard/dist/web/static/woff2/Pretendard-Regular.woff2
-  https://github.com/orioncactus/pretendard/raw/main/packages/pretendard/dist/web/static/woff2/Pretendard-Bold.woff2
