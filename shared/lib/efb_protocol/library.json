@@ -1,0 +1,8 @@
+{
+  "name": "efb_protocol",
+  "version": "0.1.0",
+  "description": "E-FairBoard LoRa 패킷 프로토콜 — CRC16/COBS/패킷/프레이밍. 하드웨어 의존 없음.",
+  "keywords": ["lora", "protocol", "cobs", "crc16"],
+  "frameworks": "*",
+  "platforms": "*"
+}
