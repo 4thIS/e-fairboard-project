@@ -13,6 +13,9 @@ describe('isRenderable — 노드 폰트에 있는 글자만', () => {
   it('한글 통과', () => expect(isRenderable('힣')).toBe(true))
   it('한자는 없다', () => expect(isRenderable('漢')).toBe(false))
   it('이모지도 없다', () => expect(isRenderable('🎉')).toBe(false))
+  it('한글 범위 경계 — U+D7A4(힣 바로 다음)는 없다', () => {
+    expect(isRenderable('힤')).toBe(false)
+  })
 })
 
 describe('measure', () => {
@@ -49,6 +52,15 @@ describe('clip — 넘치는 글자는 통째로 버린다 (반쪽 글자를 만
   it('실제 사례 — 32px 이면 같은 제목이 잘린다 (216px 가용)', () => {
     // 32px/한글자, 16px/ASCII → 8*32 + 4*16 = 320 > 216
     expect(clip('임베디드 SW 경진대회', 216, 2).clipped).toBe(true)
+  })
+  it('안 들어가는 글자를 만나면 그 자리에서 멈춘다 — 뒤에 더 좁은 글자가 있어도 훑지 않는다', () => {
+    // '가'(16) 들어감→pen=16. '가'(16)는 16+16=32>24 로 못 들어가 즉시 멈춘다.
+    // 이어지는 'A'(8)는 16+8=24<=24 로 들어갈 수 있었겠지만, break 이므로 절대 보지 않는다.
+    expect(clip('가가A', 24, 1)).toEqual({ text: '가', clipped: true })
+  })
+  it('없는 글자는 clip 에서도 폭을 안 먹고 출력에도 안 남는다', () => {
+    // '가'(16) + '漢'(폭 0, 자리도 안 줌) + '나'(16) = 32, 정확히 32 에 맞는다
+    expect(clip('가漢나', 32, 1)).toEqual({ text: '가나', clipped: false })
   })
 })
 
