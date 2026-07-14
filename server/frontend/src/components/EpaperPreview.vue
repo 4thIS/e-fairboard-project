@@ -43,15 +43,29 @@ watchEffect(async () => {
   if (len > 192) { clear(); return }            // 노드도 이 경우 안 그린다
 
   const version = len > 106 ? 8 : len > 53 ? 5 : 3
+  const box = props.template.qr
+
+  // 노드 draw_qr 과 같은 정수 스케일 — box.size / 모듈수 (내림). 모듈수는 버전에서
+  // 역산하지 않고 라이브러리 계산값을 그대로 쓴다(버전별 모듈수를 하드코딩하지 않는다).
+  const moduleCount = QRCode.create(props.qrUrl, { errorCorrectionLevel: 'L', version }).modules.size
+  const scale = Math.floor(box.size / moduleCount)
+  if (scale < 1) { clear(); return }            // 이 박스에 담을 수 없다 — 노드도 안 그린다
+
+  const drawn = scale * moduleCount
+  const offset = Math.floor((box.size - drawn) / 2)   // 박스 안에서 중앙 정렬 (노드와 동일)
+
   const style = getComputedStyle(document.documentElement)
   await QRCode.toCanvas(c, props.qrUrl, {
     errorCorrectionLevel: 'L', version, margin: 0,
-    scale: 1,
+    scale,
     color: {
       dark: style.getPropertyValue('--ink').trim(),
       light: style.getPropertyValue('--paper').trim(),
     },
   })
+  // toCanvas 가 캔버스 크기(drawn px)는 이미 맞춰준다 — 여기선 중앙 정렬 위치만 잡는다.
+  c.style.left = box.x + offset + 'px'
+  c.style.top = box.y + offset + 'px'
 })
 </script>
 
@@ -73,7 +87,7 @@ watchEffect(async () => {
         v-for="r in rows" :key="r.f.id"
         class="row pix"
         :style="{ left: r.f.x + 'px', top: r.f.y + 'px',
-                  fontSize: r.f.font_size + 'px', lineHeight: r.f.font_size + 'px' }"
+                  fontSize: GLYPH_CELL * r.s + 'px', lineHeight: GLYPH_CELL * r.s + 'px' }"
       >
         <!-- 글자마다 폭을 명시한다 — 브라우저 폰트 메트릭에 기대지 않는다.
              우리가 잰 폭이 곧 레이아웃이라 text.spec.ts 가 화면을 보장한다. -->
@@ -88,8 +102,6 @@ watchEffect(async () => {
         v-if="template && qrUrl"
         ref="qrCanvas"
         class="qr"
-        :style="{ left: template.qr.x + 'px', top: template.qr.y + 'px',
-                  width: template.qr.size + 'px', height: template.qr.size + 'px' }"
       />
     </div>
   </div>
