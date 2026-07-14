@@ -20,9 +20,16 @@ def _get_or_404(store: Store, node_id: int) -> NodeInfo:
 
 
 @router.get("")
-def list_nodes(store: Store = Depends(get_store)) -> list[dict]:
-    return [n.model_dump(exclude={"history"}, mode="json")
-            for n in sorted(store.state.nodes.values(), key=lambda n: n.id)]
+def list_nodes(store: Store = Depends(get_store),
+               rig=Depends(get_rig)) -> list[dict]:
+    out = []
+    for n in sorted(store.state.nodes.values(), key=lambda n: n.id):
+        data = n.model_dump(exclude={"history"}, mode="json")
+        data["display_state"] = (
+            rig.nodes[n.id].display_state
+            if rig is not None and n.id in rig.nodes else None)
+        out.append(data)
+    return out
 
 
 @router.get("/{node_id}")

@@ -26,6 +26,10 @@ class TemplateDef:
     qr: QrDef
 
 
+# e-Paper 2.9" 물리 해상도. 노드 templates.h 의 CANVAS_W/H 와 같은 값이다.
+CANVAS_W = 296
+CANVAS_H = 128
+
 # 296×128 기준 좌표 — 프론트 미리보기와 노드 펌웨어 상수의 단일 기준 소스 (스펙 §5.1)
 #
 # font_size 는 16 또는 32 만 쓴다 (이슈 #12).
@@ -63,5 +67,24 @@ TEMPLATES: dict[int, TemplateDef] = {
 }
 
 
+def field_avail_w(f: FieldDef, qr: QrDef) -> int:
+    """필드 한 행이 실제로 쓸 수 있는 가로 폭(px).
+
+    QR 박스와 **세로로 겹치는 행만** QR 앞까지로 줄어든다. 안 겹치는 행은 캔버스 끝까지 쓴다.
+
+    node_core/layout.cpp 의 field_avail_w() 와 **같은 식**이다 — 한쪽만 고치면 다른 쪽이 터진다.
+    프론트는 이 값을 API 로 받아쓴다. 세 번째 구현을 만들지 말 것.
+    """
+    overlaps = f.y < qr.y + qr.size and qr.y < f.y + f.font_size
+    right = qr.x if overlaps else CANVAS_W
+    return max(0, right - f.x)
+
+
 def as_dict() -> list[dict]:
-    return [asdict(tpl) for tpl in TEMPLATES.values()]
+    out = []
+    for tpl in TEMPLATES.values():
+        d = asdict(tpl)
+        for fd, f in zip(d["fields"], tpl.fields):
+            fd["avail_w"] = field_avail_w(f, tpl.qr)  # 프론트 미리보기용 (스펙 §6.2)
+        out.append(d)
+    return out

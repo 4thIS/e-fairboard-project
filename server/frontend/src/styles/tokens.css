@@ -1,0 +1,19 @@
+/* 다크 관제센터 팔레트 (스펙 §4) */
+:root {
+  --bg:        #0E1116;   /* 페이지 배경 */
+  --panel:     #161B22;   /* 카드·다이얼로그 */
+  --border:    #2D333B;   /* 패널 테두리·구분선 */
+  --input-bg:  #0E1116;
+  --text:      #E6EDF3;
+  --muted:     #8B949E;
+  --ok:        #3FB950;   /* 온라인·성공 */
+  --err:       #F85149;   /* 오프라인·실패·경고 */
+  --busy:      #D29922;   /* 배포 중 */
+  --action:    #238636;   /* 주요 버튼 */
+
+  /* e-Paper 미리보기 내부 — EpaperPreview.vue 가 참조 (복원 코드와 이름 계약) */
+  --ink:       #1A1A1A;
+  --paper:     #FFFFFF;
+
+  --mono: ui-monospace, Consolas, 'D2Coding', monospace;
+}

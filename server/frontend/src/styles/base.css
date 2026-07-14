@@ -1,0 +1,53 @@
+@font-face {
+  font-family: 'NeoDunggeunmo';
+  src: url('/fonts/NeoDunggeunmo.woff2') format('woff2');
+  font-display: block;   /* 미리보기 글자가 폴백 폰트로 먼저 그려지면 안 된다 */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+/* 픽셀 폰트 — 미리보기 내부 전용. 보간 금지 (스펙: 노드와 픽셀 동일) */
+.pix {
+  font-family: 'NeoDunggeunmo', monospace;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+.btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.btn:disabled { color: var(--muted); cursor: not-allowed; }
+.btn-primary { background: var(--action); border-color: var(--action); color: #fff; font-weight: 600; }
+.btn-primary:disabled { background: var(--panel); border-color: var(--border); }
+
+.input, select.input {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  width: 100%;
+}
+.input:focus-visible, .btn:focus-visible, button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+.input.invalid { border-color: var(--err); }
+
+label { display: block; font-size: 11px; color: var(--muted); margin: 8px 0 2px; }
