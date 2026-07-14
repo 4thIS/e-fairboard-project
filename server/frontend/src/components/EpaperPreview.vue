@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
 import QRCode from 'qrcode'
-import { clip, advanceOf, isRenderable } from '../epaper/text'
+import { clip, advanceOf, GLYPH_CELL } from '../epaper/text'
 import { CANVAS_W, CANVAS_H, type TemplateDef } from '../epaper/types'
 
 const props = withDefaults(defineProps<{
@@ -11,14 +11,22 @@ const props = withDefaults(defineProps<{
   scale?: number
 }>(), { qrUrl: '', scale: 2 })
 
-/** 필드별로 노드와 같은 규칙으로 잘라낸다. 잘렸으면 부모에게 알린다. */
+/** 노드 scale_for 과 동일 — 정수 내림, 최소 x1 (node_core/layout.cpp). */
+function scaleFor(fontPx: number): number {
+  return Math.max(1, Math.floor(fontPx / GLYPH_CELL))
+}
+
+/** 미리보기 전체 배율. 소수/0 배율은 픽셀 정합을 깨므로 같은 규칙을 적용한다. */
+const previewScale = computed(() => Math.max(1, Math.floor(props.scale)))
+
+/** 필드별로 노드와 같은 규칙으로 잘라낸다. */
 const rows = computed(() => {
   if (!props.template) return []
   return props.template.fields.map((f) => {
     const raw = props.fields[String(f.id)] ?? ''
-    const s = f.font_size / 16          // 16 → 1, 32 → 2 (노드 scale_for 과 동일)
-    const { text, clipped } = clip(raw, f.avail_w, s)
-    return { f, s, clipped, chars: [...text].filter(isRenderable) }
+    const s = scaleFor(f.font_size)     // 16 → 1, 32 → 2 (노드 scale_for 과 동일)
+    const { text } = clip(raw, f.avail_w, s)
+    return { f, s, chars: [...text] }   // clip() 이 이미 렌더 불가 글자를 거른다
   })
 })
 
@@ -26,13 +34,23 @@ const rows = computed(() => {
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 watchEffect(async () => {
   const c = qrCanvas.value
-  if (!c || !props.template || !props.qrUrl) return
+  if (!c) return
+  // 안 그리는 모든 경로에서 이전 QR을 지운다 — 캔버스는 렌더 사이에 그대로 남는다.
+  const clear = () => c.getContext('2d')?.clearRect(0, 0, c.width, c.height)
+
+  if (!props.template || !props.qrUrl) { clear(); return }
   const len = new TextEncoder().encode(props.qrUrl).length
-  if (len > 192) return                        // 노드도 이 경우 안 그린다
+  if (len > 192) { clear(); return }            // 노드도 이 경우 안 그린다
+
   const version = len > 106 ? 8 : len > 53 ? 5 : 3
+  const style = getComputedStyle(document.documentElement)
   await QRCode.toCanvas(c, props.qrUrl, {
     errorCorrectionLevel: 'L', version, margin: 0,
-    scale: 1, color: { dark: '#1A1A1A', light: '#FFFFFF' },
+    scale: 1,
+    color: {
+      dark: style.getPropertyValue('--ink').trim(),
+      light: style.getPropertyValue('--paper').trim(),
+    },
   })
 })
 </script>
@@ -40,7 +58,7 @@ watchEffect(async () => {
 <template>
   <div
     class="epd"
-    :style="{ width: CANVAS_W * scale + 'px', height: CANVAS_H * scale + 'px' }"
+    :style="{ width: CANVAS_W * previewScale + 'px', height: CANVAS_H * previewScale + 'px' }"
     role="img"
     :aria-label="template
       ? `${template.name}: ` + rows.map(r => `${r.f.name} ${r.chars.join('')}`).join(', ')
@@ -49,7 +67,7 @@ watchEffect(async () => {
     <div
       class="inner"
       :style="{ width: CANVAS_W + 'px', height: CANVAS_H + 'px',
-                transform: `scale(${scale})` }"
+                transform: `scale(${previewScale})` }"
     >
       <div
         v-for="r in rows" :key="r.f.id"
