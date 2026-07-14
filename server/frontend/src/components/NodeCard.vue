@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api, type NodeInfo } from '../api'
+import { useDeployments } from '../stores/deployments'
 import { usePosts } from '../stores/posts'
+import DeployOverlay from './DeployOverlay.vue'
 import EpaperPreview from './EpaperPreview.vue'
 
 const props = defineProps<{ node: NodeInfo }>()
 defineEmits<{ edit: [node: NodeInfo] }>()
 
 const posts = usePosts()
+const deployments = useDeployments()
+const deploy = computed(() => deployments.byNode.get(props.node.id))
+const deploying = computed(() => deploy.value?.deployment.status === 'running')
+const deployFailed = computed(() => deploy.value?.deployment.status === 'failed')
 
 /** 스펙 §5 — ×2 기본, 뷰포트 1280px 미만이면 ×1 (정수 배율만) */
 const winW = ref(window.innerWidth)
@@ -49,20 +55,27 @@ async function ping() {
 </script>
 
 <template>
-  <article class="card" :class="{ offline }">
-    <div class="screen" :class="{ dim: offline }">
+  <article class="card" :class="{ offline: offline && !deploying, busy: deploying }">
+    <div class="screen" :class="{ dim: offline && !deploy }">
       <EpaperPreview
         :template="template"
         :fields="node.display_state?.fields ?? {}"
         :qr-url="node.display_state?.qr_url ?? ''"
         :scale="previewScale"
       />
-      <span v-if="offline" class="dim-label">마지막 커밋 화면</span>
+      <span v-if="offline && !deploy" class="dim-label">마지막 커밋 화면</span>
+      <DeployOverlay
+        v-if="deploy" :nd="deploy"
+        @retry="deployments.retry(node.id)"
+        @dismiss="deployments.dismiss(node.id)"
+      />
     </div>
 
     <div class="head">
       <span class="name">NODE 0x{{ node.id.toString(16).padStart(2, '0').toUpperCase() }} · {{ node.name }}</span>
-      <span v-if="!offline" class="ok">● ONLINE</span>
+      <span v-if="deploying" class="busy">◈ 배포 중</span>
+      <span v-else-if="deployFailed" class="err">✕ 실패</span>
+      <span v-else-if="!offline" class="ok">● ONLINE</span>
       <span v-else class="err">○ OFFLINE</span>
     </div>
 
@@ -76,7 +89,7 @@ async function ping() {
     </p>
 
     <div class="actions">
-      <button class="btn btn-primary grow" :disabled="offline" @click="$emit('edit', node)">
+      <button class="btn btn-primary grow" :disabled="offline || deploying" @click="$emit('edit', node)">
         {{ currentPost ? '내용 수정' : '내용 등록' }}
       </button>
       <button class="btn" :disabled="pinging" @click="ping">PING</button>
@@ -91,6 +104,8 @@ async function ping() {
   padding: 14px; flex: 1; min-width: 0;
 }
 .card.offline { border-color: var(--err); }
+.card.busy { border-color: var(--busy); }
+.busy { color: var(--busy); }
 .screen { position: relative; display: flex; justify-content: center; }
 .screen :deep(.epd) { box-shadow: 0 0 16px rgba(255, 255, 255, .12); }
 .screen.dim :deep(.epd) { filter: brightness(.45) grayscale(.3); }
