@@ -21,6 +21,6 @@ g++ -std=c++17 -Wall -Wextra -O2 \
     "$ROOT/node/lib/node_core/src/layout.cpp" \
     -o "$OUT/preview"
 
-# --force16: templates.py 가 16px 단일로 정리된 뒤의 모습 (이슈 #12)
-"$OUT/preview" "$ROOT/assets/efb_hangul16.bin" "$OUT" "${2:---force16}"
+# templates.py 가 정본 — 16/32px 은 gen_templates.py 로 templates.h 에 반영된다.
+"$OUT/preview" "$ROOT/assets/efb_hangul16.bin" "$OUT" 
 echo "-> $OUT/template*.pbm"

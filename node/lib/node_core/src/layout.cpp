@@ -2,6 +2,11 @@
 
 namespace node {
 
+uint8_t scale_for(uint8_t font_px) {
+    const uint8_t s = static_cast<uint8_t>(font_px / GLYPH_CELL);  // 16 -> 1, 32 -> 2
+    return s < 1 ? 1 : s;  // 16 미만이면 0 이 되어 글자가 통째로 사라진다 — 최소 x1
+}
+
 int16_t field_avail_w(const FieldDef& f, const QrDef& qr, uint8_t scale) {
     if (scale < 1) scale = 1;
 

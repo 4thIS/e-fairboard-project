@@ -125,8 +125,9 @@ public:
                 if (f.id >= node::MAX_FIELDS || !s.has_field[f.id]) continue;
 
                 // 폭을 넘는 글자는 draw_utf8 이 잘라낸다 — 화면 밖으로 절대 안 나간다.
-                // 서버가 max_bytes 로 막지만 ASCII가 섞이면 글자 수가 늘어나므로 여기서도 방어한다.
-                const uint8_t scale = scale_for(f.font_size);
+                // 서버가 max_bytes 로 막지만 ASCII는 반각이라 바이트당 폭이 한글보다 넓다
+                // (ASCII 8px/B vs 한글 5.33px/B). 바이트 상한만으로는 못 막으므로 픽셀로 잰다.
+                const uint8_t scale = node::scale_for(f.font_size);
                 const int16_t avail = node::field_avail_w(f, tpl->qr, scale);
                 node::draw_utf8(*this, font_, f.x, f.y, s.fields[f.id], scale, avail);
             }
@@ -137,10 +138,6 @@ public:
 
 private:
     ProgmemFont font_;
-
-    // 글립은 16x16 하나뿐이다. 24px 이상 필드가 남아 있으면 2배로 그린다.
-    // templates.py 가 16px 단일로 정리되면(이슈 #12, 우진) 항상 x1 이 된다.
-    static uint8_t scale_for(uint8_t font_px) { return font_px >= 24 ? 2 : 1; }
 
     // QR은 URL 문자열만 받아 노드가 직접 렌더한다 — 대역폭 최소화 (PROTOCOL.md §4).
     void draw_qr(const char* url, const node::QrDef& box) {
