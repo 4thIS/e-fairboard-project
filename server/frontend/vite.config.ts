@@ -1,5 +1,5 @@
-/// <reference types="vitest" />
-import { defineConfig } from 'vite'
+// vitest 4 부터 test 키는 'vitest/config' 의 defineConfig 에만 있다 — 'vite' 것을 쓰면 TS2769.
+import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
