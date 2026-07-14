@@ -37,6 +37,9 @@ class DeployTarget(BaseModel):
     attempts: int = 0
     error: str = ""
     acked_at: datetime | None = None
+    step_name: str = ""    # 현재/마지막 단계 — MsgType.name ("SET_TEMPLATE"…)
+    step_index: int = 0    # 1-base. 0 = 아직 시작 안 함
+    step_total: int = 0
 
 
 class Deployment(BaseModel):

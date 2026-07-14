@@ -40,3 +40,8 @@ def test_sim_config_roundtrip(client, auth_headers):
 
 def test_history_endpoint_empty_initially(client, auth_headers):
     assert client.get("/api/nodes/1/history", headers=auth_headers).json() == []
+
+
+def test_list_nodes_includes_display_state(client, auth_headers):
+    nodes = client.get("/api/nodes", headers=auth_headers).json()
+    assert all("display_state" in n for n in nodes)

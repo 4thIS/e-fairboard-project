@@ -52,8 +52,12 @@ async def run_deployment(store: Store, rig: SimRig, deployment_id: int) -> None:
         target.status = "sending"
         store.save()
         try:
-            for msg_type, payload in plan:
+            for i, (msg_type, payload) in enumerate(plan, start=1):
+                target.step_name = msg_type.name
+                target.step_index = i
+                target.step_total = len(plan)
                 target.attempts += 1
+                store.save()  # 1초 폴링이 단계 진행을 보게 한다 (스펙 §6.3)
                 await rig.link.request(target.node_id, msg_type, payload,
                                        expect=MsgType.ACK)
             target.status = "success"
