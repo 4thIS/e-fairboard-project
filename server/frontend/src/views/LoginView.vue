@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { errorMessage } from '../api/client'
 import { useAuth } from '../stores/auth'
 
 const auth = useAuth()
@@ -15,8 +16,8 @@ async function submit() {
   try {
     await auth.login(password.value)
     router.push('/')
-  } catch {
-    error.value = '✕ 비밀번호가 올바르지 않습니다'
+  } catch (e) {
+    error.value = errorMessage(e, '비밀번호가 올바르지 않습니다')
   } finally {
     busy.value = false
   }
