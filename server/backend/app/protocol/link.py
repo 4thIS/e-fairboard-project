@@ -94,7 +94,10 @@ class LinkManager:
                 raise LinkTimeoutError("ack timeout")
             try:
                 pkt = await asyncio.wait_for(self._inbox.get(), timeout=remaining)
-            except TimeoutError:
+            except asyncio.TimeoutError:
+                # asyncio.TimeoutError 로 잡아야 한다 — 3.11 부터만 builtin TimeoutError 의
+                # 별칭이고, 3.10 에서는 별개 클래스라 `except TimeoutError` 가 못 잡는다.
+                # 못 잡으면 재전송이 통째로 죽고 배포 태스크가 그대로 터진다.
                 raise LinkTimeoutError("ack timeout") from None
             if pkt.src != dst:
                 continue
