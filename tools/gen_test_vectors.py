@@ -4,6 +4,7 @@
 서버가 실제로 내보내는 바이트여야 와이어 포맷 불일치가 테스트에서 잡힌다.
 
 실행: ~/venv/bin/python tools/gen_test_vectors.py
+      ~/venv/bin/python tools/gen_test_vectors.py --check   # 드리프트 검사 (CI)
 출력: shared/test/golden_vectors.h
 """
 
@@ -40,7 +41,7 @@ def emit_bytes(lines: list[str], name: str, data: bytes) -> None:
     lines.append(f"constexpr size_t {name}_LEN = {len(data)};")
 
 
-def main() -> None:
+def render() -> str:
     lines: list[str] = [
         "// 자동 생성 — 수정하지 말 것. tools/gen_test_vectors.py 로 재생성한다.",
         "// 원본: server/backend/app/protocol (우진 작성 레퍼런스 구현)",
@@ -119,9 +120,29 @@ def main() -> None:
     lines.append("}  // namespace golden")
     lines.append("")
 
+    return "\n".join(lines)
+
+
+def main() -> None:
+    content = render()
+
+    # 드리프트 가드 — 서버 프로토콜이 바뀌었는데 골든 벡터를 재생성 안 하면,
+    # C++ 테스트는 옛 바이트에 대고 통과하면서 와이어 포맷 불일치를 못 잡는다.
+    # 상호 검증의 근거 자체가 썩는 것이라 templates.h 드리프트보다 위험하다.
+    if "--check" in sys.argv:
+        if not OUT.exists():
+            sys.exit(f"FAIL {OUT.relative_to(ROOT)} 가 없습니다. gen_test_vectors.py 를 실행하세요.")
+        if OUT.read_text(encoding="utf-8") != content:
+            sys.exit(
+                f"FAIL {OUT.relative_to(ROOT)} 가 app/protocol 과 어긋납니다.\n"
+                f"     python tools/gen_test_vectors.py 를 실행하고 커밋하세요."
+            )
+        print(f"OK   {OUT.relative_to(ROOT)} — app/protocol 과 일치")
+        return
+
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text("\n".join(lines), encoding="utf-8")
-    print(f"wrote {OUT.relative_to(ROOT)}  ({len(lines)} lines)")
+    OUT.write_text(content, encoding="utf-8")
+    print(f"wrote {OUT.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

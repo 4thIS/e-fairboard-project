@@ -15,6 +15,13 @@
 #include <efb/ports.h>
 #include <node/state_machine.h>
 #include <node/templates.h>
+#include <node/layout.h>
+#include <node/text.h>
+
+// 16px 한글 비트맵 (node/src/font_data.cpp — Neo둥근모 SIL OFL 1.1 파생, assets/OFL.txt).
+// 완성형 전체 11,172자 + ASCII. 서브셋이 아니라 서버 입력 검증이 필요 없다 (이슈 #12).
+extern const uint8_t EFB_HANGUL16[] PROGMEM;
+extern const size_t EFB_HANGUL16_LEN;
 
 #ifndef EFB_NODE_ID
 #define EFB_NODE_ID 0x01  // 노드마다 다르게 — platformio.ini 의 build_flags 로 덮어쓴다
@@ -69,11 +76,36 @@ public:
     }
 };
 
+// 16px 한글 비트맵 폰트 — PROGMEM. 완성형 전체(11,172자)라 서브셋 두부가 없다 (이슈 #12).
+class ProgmemFont : public node::IGlyphSource {
+public:
+    bool glyph(uint32_t cp, uint8_t out[node::GLYPH_BYTES], uint8_t& advance_px) override {
+        size_t index;
+        if (cp >= 0x20 && cp <= 0x7E) {
+            index = cp - 0x20;
+            advance_px = 8;  // ASCII 반각
+        } else if (cp >= 0xAC00 && cp <= 0xD7A3) {
+            index = 95 + (cp - 0xAC00);  // ASCII 95자 다음
+            advance_px = 16;             // 한글 전각
+        } else {
+            return false;
+        }
+        const size_t off = index * node::GLYPH_BYTES;
+        if (off + node::GLYPH_BYTES > EFB_HANGUL16_LEN) return false;
+        for (size_t i = 0; i < node::GLYPH_BYTES; ++i) {
+            out[i] = pgm_read_byte(EFB_HANGUL16 + off + i);
+        }
+        return true;
+    }
+};
+
 // GxEPD2 렌더. 이 호출은 블로킹이라 도는 동안(부분 ~1초 / 전체 ~3초) 노드는 무선을 못 듣는다.
 // 서버는 총 4회 x T_ack 1.5초 = 6초를 기다리므로 전체갱신이 5.3초를 넘으면 배포가 실패한다.
 // 하드웨어 도착 후 실측할 것 — 넘으면 COMMIT 전용 T_ack 을 우진과 협의해야 한다.
-class EpdDisplay : public node::IDisplay {
+class EpdDisplay : public node::IDisplay, public node::ICanvas {
 public:
+    void pixel(int16_t x, int16_t y) override { epd.drawPixel(x, y, GxEPD_BLACK); }
+
     void render(const node::DisplayState& s, uint8_t refresh_mode) override {
         const node::TemplateDef* tpl = node::find_template(s.template_id);
         if (!tpl) return;
@@ -87,16 +119,17 @@ public:
         epd.firstPage();
         do {
             epd.fillScreen(GxEPD_WHITE);
-            epd.setTextColor(GxEPD_BLACK);
 
             for (uint8_t i = 0; i < tpl->field_count; ++i) {
                 const node::FieldDef& f = tpl->fields[i];
                 if (f.id >= node::MAX_FIELDS || !s.has_field[f.id]) continue;
-                // TODO: 한글 비트맵 폰트 — 기본 GFX 폰트는 ASCII 전용이라 한글이 깨진다.
-                //       PROTOCOL.md §10 미해결 항목. 폰트가 정해지면 여기만 바꾸면 된다.
-                epd.setTextSize(text_size_for(f.font_size));
-                epd.setCursor(f.x, f.y);
-                epd.print(s.fields[f.id]);
+
+                // 폭을 넘는 글자는 draw_utf8 이 잘라낸다 — 화면 밖으로 절대 안 나간다.
+                // 서버가 max_bytes 로 막지만 ASCII는 반각이라 바이트당 폭이 한글보다 넓다
+                // (ASCII 8px/B vs 한글 5.33px/B). 바이트 상한만으로는 못 막으므로 픽셀로 잰다.
+                const uint8_t scale = node::scale_for(f.font_size);
+                const int16_t avail = node::field_avail_w(f, tpl->qr, scale);
+                node::draw_utf8(*this, font_, f.x, f.y, s.fields[f.id], scale, avail);
             }
 
             if (s.has_qr) draw_qr(s.qr_url, tpl->qr);
@@ -104,10 +137,7 @@ public:
     }
 
 private:
-    static uint8_t text_size_for(uint8_t font_px) {
-        const uint8_t n = static_cast<uint8_t>(font_px / 8);  // GFX 기본 글립은 6x8
-        return n < 1 ? 1 : n;
-    }
+    ProgmemFont font_;
 
     // QR은 URL 문자열만 받아 노드가 직접 렌더한다 — 대역폭 최소화 (PROTOCOL.md §4).
     void draw_qr(const char* url, const node::QrDef& box) {
