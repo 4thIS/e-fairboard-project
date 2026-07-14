@@ -1,0 +1,8 @@
+{
+  "name": "gw_core",
+  "version": "0.1.0",
+  "description": "게이트웨이 중계 로직 — 시리얼 <-> LoRa. 하드웨어 의존 없음.",
+  "dependencies": {"efb_protocol": "*"},
+  "frameworks": "*",
+  "platforms": "*"
+}
