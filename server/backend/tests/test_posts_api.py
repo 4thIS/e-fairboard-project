@@ -10,7 +10,7 @@ def test_requires_auth(client):
 def test_templates_endpoint(client, auth_headers):
     res = client.get("/api/templates", headers=auth_headers)
     assert res.status_code == 200
-    assert len(res.json()) == 4
+    assert len(res.json()) == 5   # 가로 4 + 세로 "팀 소개" 1
 
 
 def test_create_and_get_post(client, auth_headers):
