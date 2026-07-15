@@ -11,12 +11,18 @@ export interface FieldDef {
 
 export interface QrDef { x: number; y: number; size: number }
 
+export interface Canvas { w: number; h: number }
+
 export interface TemplateDef {
   id: number
   name: string
   fields: FieldDef[]
   qr: QrDef
+  canvas: Canvas      // 가로 296×128 / 세로 128×296 — 템플릿의 속성이다
 }
 
-export const CANVAS_W = 296
-export const CANVAS_H = 128
+/** 표시할 템플릿이 없을 때(미배포 노드) 그리는 빈 화면의 크기. */
+export const DEFAULT_CANVAS: Canvas = { w: 296, h: 128 }
+
+/** 세로 미리보기가 카드를 밀어내지 않는 한도. 정수 배율만 쓰므로 ×2/×1 만 나온다. */
+export const MAX_PREVIEW_H = 320

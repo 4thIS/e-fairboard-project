@@ -2,7 +2,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import QRCode from 'qrcode'
 import { clip, advanceOf, scaleFor, GLYPH_CELL } from '../epaper/text'
-import { CANVAS_W, CANVAS_H, type TemplateDef } from '../epaper/types'
+import { DEFAULT_CANVAS, MAX_PREVIEW_H, type TemplateDef } from '../epaper/types'
 
 const props = withDefaults(defineProps<{
   template: TemplateDef | null
@@ -11,8 +11,17 @@ const props = withDefaults(defineProps<{
   scale?: number
 }>(), { qrUrl: '', scale: 2 })
 
-/** 미리보기 전체 배율. 소수/0 배율은 픽셀 정합을 깨므로 같은 규칙을 적용한다. */
-const previewScale = computed(() => Math.max(1, Math.floor(props.scale)))
+/** 캔버스는 템플릿의 속성. 템플릿이 없으면 가로 빈 화면. */
+const canvas = computed(() => props.template?.canvas ?? DEFAULT_CANVAS)
+
+/** 전체 배율. 소수/0 배율은 픽셀 정합을 깨므로 정수로 내린다.
+ *  세로(296px)는 ×2 면 592px 라 카드를 밀어낸다 → 캔버스 높이로 상한을 건다.
+ *  여기서 캡을 걸면 카드·다이얼로그 등 **모든 호출자가 한 번에 안전**해진다. */
+const previewScale = computed(() => {
+  const want = Math.max(1, Math.floor(props.scale))
+  const fit = canvas.value.h * 2 <= MAX_PREVIEW_H ? 2 : 1
+  return Math.min(want, fit)
+})
 
 /** 필드별로 노드와 같은 규칙으로 잘라낸다. */
 const rows = computed(() => {
@@ -67,7 +76,7 @@ watchEffect(async () => {
 <template>
   <div
     class="epd"
-    :style="{ width: CANVAS_W * previewScale + 'px', height: CANVAS_H * previewScale + 'px' }"
+    :style="{ width: canvas.w * previewScale + 'px', height: canvas.h * previewScale + 'px' }"
     role="img"
     :aria-label="template
       ? `${template.name}: ` + rows.map(r => `${r.f.name} ${r.chars.join('')}`).join(', ')
@@ -75,7 +84,7 @@ watchEffect(async () => {
   >
     <div
       class="inner"
-      :style="{ width: CANVAS_W + 'px', height: CANVAS_H + 'px',
+      :style="{ width: canvas.w + 'px', height: canvas.h + 'px',
                 transform: `scale(${previewScale})` }"
     >
       <div
