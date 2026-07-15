@@ -130,8 +130,8 @@ async function save() {
       </div>
 
       <div class="side">
-        <label>라이브 미리보기 (296×128)</label>
-        <EpaperPreview :template="template" :fields="form.fields" :qr-url="form.qr_url" :box-w="440" :box-h="420" />
+        <label>라이브 미리보기 {{ template?.canvas ? `(${template.canvas.w}×${template.canvas.h})` : '' }}</label>
+        <EpaperPreview :template="template" :fields="form.fields" :qr-url="form.qr_url" :box-w="400" :box-h="340" />
         <label>갱신 방식</label>
         <div class="radios">
           <label class="radio"><input v-model.number="refreshMode" type="radio" :value="0" /> 부분(빠름)</label>
@@ -153,13 +153,15 @@ async function save() {
 <style scoped>
 .dlg {
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-  color: var(--text); padding: 16px; width: 640px; max-width: 90vw;
+  color: var(--text); padding: 16px; width: 760px; max-width: 90vw;
+  /* base.css 의 * { margin: 0 } 이 native dialog 의 margin:auto 를 덮어써 좌상단에 붙는다 → 되살린다 */
+  margin: auto;
 }
 .dlg::backdrop { background: rgba(14, 17, 22, .8); }
 .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .cols { display: flex; gap: 16px; }
 .form { flex: 1; min-width: 0; }
-.side { width: 300px; }
+.side { width: 430px; flex-shrink: 0; }
 .warn { color: var(--err); font-size: 11px; margin-top: 2px; }
 .radios { display: flex; gap: 12px; font-size: 12px; }
 .radio { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); margin: 0; }
