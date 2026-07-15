@@ -22,7 +22,4 @@ export interface TemplateDef {
 }
 
 /** 표시할 템플릿이 없을 때(미배포 노드) 그리는 빈 화면의 크기. */
-export const DEFAULT_CANVAS: Canvas = { w: 296, h: 128 }
-
-/** 세로 미리보기가 카드를 밀어내지 않는 한도. 정수 배율만 쓰므로 ×2/×1 만 나온다. */
-export const MAX_PREVIEW_H = 320
+export const DEFAULT_CANVAS: Canvas = { w: 800, h: 480 }
