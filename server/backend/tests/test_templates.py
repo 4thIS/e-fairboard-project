@@ -1,13 +1,14 @@
 from app.protocol.templates import TEMPLATES, as_dict, field_avail_w
 
 
-def test_four_templates_defined():
-    assert set(TEMPLATES.keys()) == {0, 1, 2, 3}
+def test_templates_defined():
+    assert set(TEMPLATES.keys()) == {0, 1, 2, 3, 4}
 
 
 def test_field_ids_match_protocol_spec():
-    # PROTOCOL.md §8: 행사 안내(0)=필드 4개, 부스 지도(1)=2, 모집 공고(2)=3, 일정표(3)=4
-    assert [len(TEMPLATES[i].fields) for i in range(4)] == [4, 2, 3, 4]
+    # PROTOCOL.md §8: 행사 안내(0)=4, 부스 지도(1)=2, 모집 공고(2)=3, 일정표(3)=4
+    # + 팀 소개(4)=4 (세로, PROTOCOL.md 반영은 준표와 협의 — 스펙 §Global Constraints)
+    assert [len(TEMPLATES[i].fields) for i in range(5)] == [4, 2, 3, 4, 4]
     for tpl in TEMPLATES.values():
         assert [f.id for f in tpl.fields] == list(range(len(tpl.fields)))
 
@@ -50,7 +51,7 @@ def test_geometry_inside_each_templates_canvas():
 
 def test_as_dict_is_json_shape():
     data = as_dict()
-    assert len(data) == 4
+    assert len(data) == 5
     assert data[0]["fields"][0]["name"]
     assert {"x", "y", "size"} <= set(data[0]["qr"].keys())
 
@@ -95,3 +96,21 @@ def test_field_avail_w_uses_the_given_canvas_not_a_global():
 def test_as_dict_carries_canvas():
     data = as_dict()
     assert data[0]["canvas"] == {"w": 296, "h": 128}
+
+
+def test_portrait_template_is_128x296():
+    tpl = TEMPLATES[4]
+    assert (tpl.canvas_w, tpl.canvas_h) == (128, 296)
+    assert tpl.name == "팀 소개"
+
+
+def test_portrait_fields_are_all_16px():
+    # 32px 한글은 폭 120px 안에 3자만 들어간다 — 한글 팀명이 잘린다 (스펙 §2)
+    assert all(f.font_size == 16 for f in TEMPLATES[4].fields)
+
+
+def test_portrait_avail_w_is_the_narrow_canvas():
+    tpl = TEMPLATES[4]
+    # QR(y 140~235)과 세로로 겹치는 필드가 없다 → 모든 행이 캔버스 끝(128)까지
+    for f in tpl.fields:
+        assert field_avail_w(f, tpl.qr, tpl.canvas_w) == 120, f.name
