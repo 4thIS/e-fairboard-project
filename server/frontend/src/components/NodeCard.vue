@@ -106,7 +106,7 @@ async function ping() {
 .card.offline { border-color: var(--err); }
 .card.busy { border-color: var(--busy); }
 .busy { color: var(--busy); }
-.screen { position: relative; display: flex; justify-content: center; }
+.screen { position: relative; display: flex; justify-content: center; align-items: flex-start; }
 .screen :deep(.epd) { box-shadow: 0 0 16px rgba(255, 255, 255, .12); }
 .screen.dim :deep(.epd) { filter: brightness(.45) grayscale(.3); }
 .dim-label { position: absolute; top: 6px; right: 6px; font-size: 10px; color: var(--err); }
