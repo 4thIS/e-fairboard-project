@@ -131,7 +131,7 @@ async function save() {
 
       <div class="side">
         <label>라이브 미리보기 (296×128)</label>
-        <EpaperPreview :template="template" :fields="form.fields" :qr-url="form.qr_url" :scale="1" />
+        <EpaperPreview :template="template" :fields="form.fields" :qr-url="form.qr_url" :box-w="440" :box-h="420" />
         <label>갱신 방식</label>
         <div class="radios">
           <label class="radio"><input v-model.number="refreshMode" type="radio" :value="0" /> 부분(빠름)</label>
