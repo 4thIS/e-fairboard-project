@@ -34,17 +34,18 @@ def test_max_bytes_fits_screen_width():
     """
     for tpl in TEMPLATES.values():
         for f in tpl.fields:
-            avail = field_avail_w(f, tpl.qr)
+            avail = field_avail_w(f, tpl.qr, tpl.canvas_w)
             width = (f.max_bytes // 3) * f.font_size
             assert width <= avail, (
                 f"{tpl.name}/{f.name}: {f.max_bytes}B → {width}px > 가용 {avail}px")
 
 
-def test_geometry_inside_296x128():
+def test_geometry_inside_each_templates_canvas():
     for tpl in TEMPLATES.values():
+        w, h = tpl.canvas_w, tpl.canvas_h
         for f in tpl.fields:
-            assert 0 <= f.x < 296 and 0 <= f.y < 128
-        assert tpl.qr.x + tpl.qr.size <= 296 and tpl.qr.y + tpl.qr.size <= 128
+            assert 0 <= f.x < w and 0 <= f.y < h, f"{tpl.name}/{f.name}"
+        assert tpl.qr.x + tpl.qr.size <= w and tpl.qr.y + tpl.qr.size <= h, tpl.name
 
 
 def test_as_dict_is_json_shape():
@@ -58,17 +59,17 @@ def test_field_avail_w_shrinks_only_for_rows_overlapping_qr():
     tpl = TEMPLATES[0]  # 행사 안내, QR(224, 32, 64)
     title, when = tpl.fields[0], tpl.fields[1]
     # 제목 y=8, 16px → 8~24. QR은 y 32~96 → 안 겹침 → 캔버스 끝까지
-    assert field_avail_w(title, tpl.qr) == 296 - 8
+    assert field_avail_w(title, tpl.qr, tpl.canvas_w) == 296 - 8
     # 일시 y=48, 16px → 48~64. QR과 겹침 → QR 앞까지
-    assert field_avail_w(when, tpl.qr) == 224 - 8
+    assert field_avail_w(when, tpl.qr, tpl.canvas_w) == 224 - 8
 
 
 def test_template3_qr_is_higher_so_different_rows_overlap():
     tpl = TEMPLATES[3]  # 일정표, QR(240, 8, 48) → y 8~56
     date, s1, s2 = tpl.fields[0], tpl.fields[1], tpl.fields[2]
-    assert field_avail_w(date, tpl.qr) == 240 - 8   # y 8~24  겹침
-    assert field_avail_w(s1, tpl.qr) == 240 - 8     # y 44~60 겹침
-    assert field_avail_w(s2, tpl.qr) == 296 - 8     # y 72~88 안 겹침
+    assert field_avail_w(date, tpl.qr, tpl.canvas_w) == 240 - 8   # y 8~24  겹침
+    assert field_avail_w(s1, tpl.qr, tpl.canvas_w) == 240 - 8     # y 44~60 겹침
+    assert field_avail_w(s2, tpl.qr, tpl.canvas_w) == 296 - 8     # y 72~88 안 겹침
 
 
 def test_as_dict_carries_avail_w():
@@ -76,3 +77,21 @@ def test_as_dict_carries_avail_w():
     fields = data[0]["fields"]
     assert fields[0]["avail_w"] == 288
     assert fields[1]["avail_w"] == 216
+
+
+def test_template_carries_its_own_canvas():
+    # 기존 가로 템플릿은 296×128 기본값 그대로
+    assert (TEMPLATES[0].canvas_w, TEMPLATES[0].canvas_h) == (296, 128)
+
+
+def test_field_avail_w_uses_the_given_canvas_not_a_global():
+    """세로 캔버스(128)에서 296 이 새어 들어오면 미리보기가 거짓말을 한다."""
+    tpl = TEMPLATES[0]
+    f = tpl.fields[0]  # 제목 x=8, y=8 — QR(224,32,64)과 안 겹침
+    assert field_avail_w(f, tpl.qr, 296) == 288
+    assert field_avail_w(f, tpl.qr, 128) == 120   # 캔버스가 좁으면 가용 폭도 좁다
+
+
+def test_as_dict_carries_canvas():
+    data = as_dict()
+    assert data[0]["canvas"] == {"w": 296, "h": 128}

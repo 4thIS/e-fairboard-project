@@ -24,9 +24,13 @@ class TemplateDef:
     name: str
     fields: tuple[FieldDef, ...]
     qr: QrDef
+    # 캔버스는 템플릿의 속성이다 — 세로 템플릿은 패널을 세워 128×296 을 쓴다.
+    # 기본값이 있어 기존 가로 템플릿 정의는 한 글자도 안 바뀐다.
+    canvas_w: int = 296
+    canvas_h: int = 128
 
 
-# e-Paper 2.9" 물리 해상도. 노드 templates.h 의 CANVAS_W/H 와 같은 값이다.
+# 가로 템플릿의 기본 캔버스. 세로 템플릿은 TemplateDef 에서 128×296 으로 덮어쓴다.
 CANVAS_W = 296
 CANVAS_H = 128
 
@@ -67,16 +71,19 @@ TEMPLATES: dict[int, TemplateDef] = {
 }
 
 
-def field_avail_w(f: FieldDef, qr: QrDef) -> int:
+def field_avail_w(f: FieldDef, qr: QrDef, canvas_w: int) -> int:
     """필드 한 행이 실제로 쓸 수 있는 가로 폭(px).
 
     QR 박스와 **세로로 겹치는 행만** QR 앞까지로 줄어든다. 안 겹치는 행은 캔버스 끝까지 쓴다.
+
+    canvas_w 는 **템플릿의 것**을 넘긴다 — 전역 상수를 쓰면 세로 템플릿(128)에서 296 이
+    새어 들어와, 노드는 자르는데 미리보기는 안 자르는 거짓말이 된다.
 
     node_core/layout.cpp 의 field_avail_w() 와 **같은 식**이다 — 한쪽만 고치면 다른 쪽이 터진다.
     프론트는 이 값을 API 로 받아쓴다. 세 번째 구현을 만들지 말 것.
     """
     overlaps = f.y < qr.y + qr.size and qr.y < f.y + f.font_size
-    right = qr.x if overlaps else CANVAS_W
+    right = qr.x if overlaps else canvas_w
     return max(0, right - f.x)
 
 
@@ -84,7 +91,8 @@ def as_dict() -> list[dict]:
     out = []
     for tpl in TEMPLATES.values():
         d = asdict(tpl)
+        d["canvas"] = {"w": d.pop("canvas_w"), "h": d.pop("canvas_h")}
         for fd, f in zip(d["fields"], tpl.fields):
-            fd["avail_w"] = field_avail_w(f, tpl.qr)  # 프론트 미리보기용 (스펙 §6.2)
+            fd["avail_w"] = field_avail_w(f, tpl.qr, tpl.canvas_w)  # 스펙 §6.2
         out.append(d)
     return out
