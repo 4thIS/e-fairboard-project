@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api, type NodeInfo } from '../api'
 import { useDeployments } from '../stores/deployments'
 import { usePosts } from '../stores/posts'
@@ -14,13 +14,6 @@ const deployments = useDeployments()
 const deploy = computed(() => deployments.byNode.get(props.node.id))
 const deploying = computed(() => deploy.value?.deployment.status === 'running')
 const deployFailed = computed(() => deploy.value?.deployment.status === 'failed')
-
-/** 스펙 §5 — ×2 기본, 뷰포트 1280px 미만이면 ×1 (정수 배율만) */
-const winW = ref(window.innerWidth)
-const onResize = () => { winW.value = window.innerWidth }
-onMounted(() => window.addEventListener('resize', onResize))
-onUnmounted(() => window.removeEventListener('resize', onResize))
-const previewScale = computed(() => (winW.value < 1280 ? 1 : 2))
 
 const template = computed(() => {
   const tid = props.node.display_state?.template_id
@@ -57,11 +50,13 @@ async function ping() {
 <template>
   <article class="card" :class="{ offline: offline && !deploying, busy: deploying }">
     <div class="screen" :class="{ dim: offline && !deploy }">
+      <!-- ponytail: 고정 박스(340×250). 카드 폭이 반응형이라 완벽 정합은 아니나 2노드 데모엔 충분.
+           반응형이 필요해지면 ResizeObserver 로 실제 폭 측정. -->
       <EpaperPreview
         :template="template"
         :fields="node.display_state?.fields ?? {}"
         :qr-url="node.display_state?.qr_url ?? ''"
-        :scale="previewScale"
+        :box-w="340" :box-h="250"
       />
       <span v-if="offline && !deploy" class="dim-label">마지막 커밋 화면</span>
       <DeployOverlay
@@ -106,7 +101,7 @@ async function ping() {
 .card.offline { border-color: var(--err); }
 .card.busy { border-color: var(--busy); }
 .busy { color: var(--busy); }
-.screen { position: relative; display: flex; justify-content: center; }
+.screen { position: relative; display: flex; justify-content: center; align-items: flex-start; }
 .screen :deep(.epd) { box-shadow: 0 0 16px rgba(255, 255, 255, .12); }
 .screen.dim :deep(.epd) { filter: brightness(.45) grayscale(.3); }
 .dim-label { position: absolute; top: 6px; right: 6px; font-size: 10px; color: var(--err); }

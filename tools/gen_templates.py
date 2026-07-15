@@ -33,9 +33,10 @@ def render() -> str:
         "",
         "namespace node {",
         "",
-        "// e-Paper 2.9\" 296x128 기준 좌표.",
-        "constexpr int16_t CANVAS_W = 296;",
-        "constexpr int16_t CANVAS_H = 128;",
+        "// e-Paper 7.5\" 기본(가로) 캔버스. 세로 템플릿은 TemplateDef.canvas_w/h 로 덮어쓴다.",
+        "// layout.cpp 는 아직 이 전역을 쓴다 — 템플릿별 캔버스로 옮겨야 한다(준표).",
+        "constexpr int16_t CANVAS_W = 800;",
+        "constexpr int16_t CANVAS_H = 480;",
         "",
         f"constexpr size_t TEMPLATE_COUNT = {len(TEMPLATES)};",
         f"constexpr size_t TEMPLATE_MAX_FIELDS = {max_fields};",
@@ -61,6 +62,8 @@ def render() -> str:
         "    uint8_t field_count;",
         "    FieldDef fields[TEMPLATE_MAX_FIELDS];",
         "    QrDef qr;",
+        "    int16_t canvas_w;   // 가로 800 / 세로 480",
+        "    int16_t canvas_h;   // 가로 480 / 세로 800",
         "};",
         "",
         "constexpr TemplateDef TEMPLATES[TEMPLATE_COUNT] = {",
@@ -77,7 +80,10 @@ def render() -> str:
         # 남는 슬롯을 0으로 채워 집합 초기화 경고를 막는다
         for _ in range(max_fields - len(tpl.fields)):
             lines.append("        {0, nullptr, 0, 0, 0, 0},")
-        lines.append(f"    }}, {{{tpl.qr.x}, {tpl.qr.y}, {tpl.qr.size}}}}},")
+        lines.append(
+            f"    }}, {{{tpl.qr.x}, {tpl.qr.y}, {tpl.qr.size}}}, "
+            f"{tpl.canvas_w}, {tpl.canvas_h}}},"
+        )
 
     lines += [
         "};",

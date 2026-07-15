@@ -85,3 +85,16 @@ describe('scaleFor — 노드 scale_for 과 동일 (node_core/layout.cpp)', () =
     expect(scaleFor(20)).toBe(1)
   })
 })
+
+describe('세로 캔버스(폭 120px)', () => {
+  it('한글 7자는 들어가고 8자째는 통째로 버린다', () => {
+    // 노드와 같은 규칙: 한글 16px, 넘치는 글자는 반쪽으로 그리지 않고 버린다
+    expect(clip('일이삼사오육칠', 120, 1)).toEqual({ text: '일이삼사오육칠', clipped: false })
+    expect(clip('일이삼사오육칠팔', 120, 1)).toEqual({ text: '일이삼사오육칠', clipped: true })
+  })
+
+  it('ASCII 는 반각이라 15자까지 들어간다', () => {
+    expect(measure('ABCDEFGHIJKLMNO', 1)).toBe(120)
+    expect(clip('ABCDEFGHIJKLMNOP', 120, 1).clipped).toBe(true)
+  })
+})
