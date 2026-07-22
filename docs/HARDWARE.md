@@ -41,16 +41,21 @@
 
 ## 3. 노드 핀맵 (ESP32 + SX1262 HAT + 7.5" e-Paper)
 
-### LoRa SX1262 HAT (UART)  ⚠️ 효민 재설계
-SPI 시절 핀맵(NSS/DIO1/RST/BUSY)은 **폐기**. HAT은 UART로 붙는다. 필요한 신호:
+### LoRa SX1262 HAT (UART)  〔확정 2026-07-22 — 효민〕
+SPI 시절 핀맵(NSS/DIO1/RST/BUSY)은 **폐기**. HAT은 UART로 붙는다.
 
-| HAT 신호 | 역할 | ESP32 |
-|------|------|:---:|
-| TXD/RXD | UART 데이터(9600) | ⚠️ UART2 등 배정 — 효민 |
-| M0, M1 | 모드(전송/설정) — 설정모드로 AT 레지스터 기록 | ⚠️ GPIO 2개 — 효민 |
-| AUX | 송수신 상태(busy) | ⚠️ GPIO 1개 — 효민 |
-| VCC/GND | 전원 | 3V3 또는 5V(HAT 사양 확인) / GND |
-| ANT | 안테나 (**무안테나 송신 금지**) | — |
+| HAT 신호 | 역할 | ESP32 GPIO | 비고 |
+|------|------|:---:|------|
+| TXD (HAT→ESP32) | UART2 RX, 9600bps | 16 | `Serial2.begin(9600, SERIAL_8N1, 16, 4)` |
+| RXD (ESP32→HAT) | UART2 TX, 9600bps | 4 | 기본 UART2 핀(16/17) 중 17은 e-Paper CS 사용 중이라 커스텀 핀으로 재매핑 |
+| M0 | 모드 선택 비트0 | 32 | 평상시 LOW(전송모드), 설정 시 HIGH — HAT 모드표는 PROTOCOL.md §1 참조 |
+| M1 | 모드 선택 비트1 | 33 | 상동 |
+| AUX | 송수신 상태(busy) | 35 | 입력 전용 핀(ADC1_CH7) — digitalRead만 하므로 출력 불가해도 무방, 출력 가능 핀을 아낌 |
+| VCC/GND | 전원 | 3V3 / GND | ⚠️ HAT 실물 라벨/데이터시트로 3V3 인지 재확인 — 5V 요구 시 별도 레귤레이터 필요 |
+| ANT | 안테나 (**무안테나 송신 금지**) | — | |
+
+- 배정 근거: e-Paper SPI(17,25,26,27,18,23)·배터리 ADC(34)와 미충돌, 스트래핑 핀(0/2/5/12/15)·내장 Flash 핀(6~11) 회피.
+- 전제: HAT이 Ebyte 계열 M0/M1/AUX 투명전송 방식(PROTOCOL.md §1 "M0=GND·M1 open→설정모드" 근거). **HAT 실물 라벨/데이터시트로 M0/M1 레벨 의미(전송/웨이크업/설정 조합) 재확인 필요** — 방식이 다르면 이 표 수정.
 
 ### e-Paper 7.5" (Waveshare SPI)  — SPI 신호는 유지, 패널만 교체
 | 모듈 핀 | ESP32 GPIO |
@@ -93,11 +98,24 @@ ESP32 3V3 ─ SX1262 HAT VCC, e-Paper VCC ;  공통 GND
 - ⚠️ **LoRa TX 돌입전류(~120mA)** → HAT VCC 근처 470µF+0.1µF 디커플링.
 - 저전력 대안: 부스트 대신 저드롭 LDO(AP2112-3.3) 직접 3V3 급전(HAT·패널 전압 요구 확인 후).
 
-## 6. 핀 충돌 점검  ⚠️ UART LoRa 배정 후 재확인 (효민)
-- e-Paper SPI: 17,25,26,27(+18,23). LoRa UART/모드/AUX GPIO는 효민 배정 후 이 표에 합류.
-- 회피: GPIO0/2(부팅·LED)/12/15(스트래핑) 출력 미사용, 6~11(내장 Flash) 미사용.
-- 배터리 ADC는 Wi-Fi와 충돌 없는 **ADC1(GPIO34)** 사용. UART2 기본핀(16/17)과 e-Paper CS(17)가
-  겹치지 않게 배정 주의.
+## 6. 핀 충돌 점검  〔확정 2026-07-22 — 효민〕
+| 기능 | GPIO | 비고 |
+|------|:---:|------|
+| e-Paper CLK/DIN | 18/23 | SPI 클럭/데이터 |
+| e-Paper CS | 17 | UART2 기본 TX(17)와 겹치므로 LoRa UART는 4/16으로 재매핑 |
+| e-Paper DC | 25 | |
+| e-Paper RST | 26 | |
+| e-Paper BUSY | 27 | |
+| LoRa RXD(HAT TXD 수신) | 16 | UART2 RX |
+| LoRa TXD(HAT RXD 송신) | 4 | UART2 TX |
+| LoRa M0 | 32 | |
+| LoRa M1 | 33 | |
+| LoRa AUX | 35 | 입력 전용 |
+| 배터리 ADC | 34 | ADC1, Wi-Fi(ADC2)와 무충돌 |
+| 상태 LED | 2 | 온보드 |
+
+- 회피 확인: GPIO0/2(부팅·LED)/5/12/15(스트래핑) 출력 미사용, 6~11(내장 Flash) 미사용 — 위 배정에 해당 없음.
+- 전체 26개 GPIO 중 12개 사용, 중복 없음. 남는 여유 핀: 13,14,19,21,22,36,39 등.
 
 ## 7. 조립 순서  〔개정〕
 1. ESP32 단독 부팅 → 2. **SX1262 HAT + UART/AT 송수신(안테나)** → 3. e-Paper 7.5" + GxEPD2 출력

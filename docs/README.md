@@ -10,6 +10,7 @@ LoRa 기반 중앙제어 e-Paper 전시/게시 팜플렛 시스템 — 설계 �
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 시스템 구조, 역할 분담, 마일스톤 |
 | [PROTOCOL.md](PROTOCOL.md) | LoRa 패킷 프로토콜 스펙 (v0.2) |
 | [HARDWARE.md](HARDWARE.md) | 부품 BOM, ESP32 핀맵, 전원 결선 |
+| [CIRCUIT.md](CIRCUIT.md) | 노드 배선 가이드 — 회로별 결선표·전원 회로 |
 
 ## 한 줄 요약  〔하드웨어 확정 2026-07-15 반영〕
 - 서버(노트북)+SX1262 HAT 직결 1 + e-Paper 노드 2 (저예산 MVP, **게이트웨이 ESP32 없음**)
