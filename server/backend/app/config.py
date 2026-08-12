@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # 링크 (PROTOCOL.md §5)
     ack_timeout_s: float = 1.5
     link_retries: int = 3
+    # COMMIT 은 노드 렌더(7.5" 3색 15~20초) 후 ACK → 훨씬 길게 대기 (PROTOCOL.md v0.2)
+    commit_ack_timeout_s: float = 25.0
 
     # 시뮬레이터
     sim_airtime_s: float = 0.35
