@@ -25,9 +25,13 @@ class LinkManager:
     """stop-and-wait 신뢰 전송 (PROTOCOL.md §5). 요청은 Lock으로 직렬화."""
 
     def __init__(self, transport: Transport, *, ack_timeout_s: float = 1.5,
-                 retries: int = 3, src: int = GATEWAY_ID) -> None:
+                 retries: int = 3, src: int = GATEWAY_ID,
+                 commit_ack_timeout_s: float | None = None) -> None:
         self._transport = transport
         self._ack_timeout_s = ack_timeout_s
+        # COMMIT 은 노드가 e-Paper 렌더(7.5" 3색 = 15~20초) 뒤에 ACK 하므로 훨씬 길게 기다린다.
+        # None 이면 ack_timeout_s 와 동일 (가상 모드는 렌더가 즉시라 무관).
+        self._commit_ack_timeout_s = commit_ack_timeout_s or ack_timeout_s
         self._retries = retries
         self._src = src
         self._seq = 0
@@ -71,12 +75,14 @@ class LinkManager:
         async with self._lock:
             seq = self._next_seq()
             frame = encode_frame(encode(Packet(self._src, dst, type_, seq, payload)))
+            timeout = (self._commit_ack_timeout_s if type_ == MsgType.COMMIT
+                       else self._ack_timeout_s)
             attempts = 1 + self._retries
             for _ in range(attempts):
                 self._drain_inbox()  # 이전 시도의 뒤늦은 응답 제거
                 await self._transport.write(frame)
                 try:
-                    reply = await self._wait_reply(dst, seq, expect)
+                    reply = await self._wait_reply(dst, seq, expect, timeout)
                 except LinkTimeoutError:
                     continue
                 if reply is not None:
@@ -85,9 +91,10 @@ class LinkManager:
             raise LinkTimeoutError(
                 f"no valid reply from 0x{dst:02X} after {attempts} attempts")
 
-    async def _wait_reply(self, dst: int, seq: int, expect: MsgType) -> Packet | None:
+    async def _wait_reply(self, dst: int, seq: int, expect: MsgType,
+                          timeout: float) -> Packet | None:
         """성공 시 Packet, BUSY면 None(재시도 신호), 타임아웃이면 예외."""
-        deadline = asyncio.get_running_loop().time() + self._ack_timeout_s
+        deadline = asyncio.get_running_loop().time() + timeout
         while True:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:

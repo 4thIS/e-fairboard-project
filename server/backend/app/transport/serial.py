@@ -65,7 +65,8 @@ class SerialRig:
         transport = SerialTransport(settings.serial_port, settings.serial_baud,
                                     fixed_channel=channel)
         link = LinkManager(transport, ack_timeout_s=settings.ack_timeout_s,
-                           retries=settings.link_retries)
+                           retries=settings.link_retries,
+                           commit_ack_timeout_s=settings.commit_ack_timeout_s)
         return cls(link, transport)
 
     async def start(self) -> None:
