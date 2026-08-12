@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/sim", tags=["sim"],
 
 
 def _require_rig(rig):
-    if rig is None:
+    if rig is None or not getattr(rig, "virtual", False):
         raise HTTPException(status_code=409, detail="not in virtual mode")
     return rig
 

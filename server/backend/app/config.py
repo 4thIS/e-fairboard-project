@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     transport_mode: Literal["virtual", "serial"] = "virtual"
     serial_port: str = "COM3"
+    serial_baud: int = 9600  # HAT UART 공장기본 (PROTOCOL.md §1)
     admin_password: str = "changeme"
 
     # 링크 (PROTOCOL.md §5)
