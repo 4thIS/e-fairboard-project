@@ -9,6 +9,11 @@ class Settings(BaseSettings):
 
     transport_mode: Literal["virtual", "serial"] = "virtual"
     serial_port: str = "COM3"
+    serial_baud: int = 9600  # HAT UART 공장기본 (PROTOCOL.md §1)
+    # HAT 고정전송(fixed) 모드: 송신 프레임 앞에 [주소H][주소L][채널] 봉투를 붙여야 공중으로 나간다
+    # (2026-08-12 LED 실측 확인). 투명모드 HAT이면 serial_fixed_mode=false 로.
+    serial_fixed_mode: bool = True
+    serial_lora_channel: int = 72  # 922MHz (freq=850+72)
     admin_password: str = "changeme"
 
     # 링크 (PROTOCOL.md §5)

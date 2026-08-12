@@ -49,15 +49,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await rig.start()
             app.state.rig = rig
             store.seed_nodes(list(NODE_IDS))
-        else:  # serial 모드 — 하드웨어 전환 계획(스펙 §10)에서 구현
-            app.state.rig = None
+        else:  # serial 모드 — 실물 HAT(COM 포트) 직결
+            from .transport.serial import SerialRig
+            rig = SerialRig.build(settings)
+            await rig.start()
+            app.state.rig = rig
+            store.seed_nodes(list(NODE_IDS))  # 배포 대상 노드 엔트리 확보
         store.save()
         schedule_service = ScheduleService(store, app.state.rig)
         schedule_service.start()
         app.state.schedule_service = schedule_service
         monitor = NodeMonitor(store, app.state.rig,
                               interval_s=settings.status_poll_interval_s)
-        if app.state.rig is not None:
+        # 실물 모드에선 상시 폴링을 끈다 — 응답 없는 노드 재전송 폭주가 링크를 점유해
+        # 브링업 중 수동 배포/핑을 방해한다. 노드 응답이 준비되면 켠다.
+        if getattr(app.state.rig, "virtual", False):
             await monitor.start()
         app.state.node_monitor = monitor
         yield
