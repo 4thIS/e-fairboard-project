@@ -35,6 +35,18 @@ export interface StatsSummary {
 }
 export interface StatusSample { t: string; batt_mv: number; rssi: number }
 
+export interface SerialPort { device: string; description: string }
+export interface RadioRegisters {
+  address: number; netid: number; uart_bps: number | null; air_bps: number | null
+  channel: number; freq_mhz: number; subpacket_bytes: number | null
+  power_dbm: number | null; raw: string
+}
+export interface RadioReadResult { ok: boolean; hint?: string; registers?: RadioRegisters }
+export interface RadioWriteResult {
+  ok: boolean; hint?: string; warn?: string | null
+  before?: RadioRegisters; after?: RadioRegisters
+}
+
 export const api = {
   login: (password: string) =>
     http.post<{ token: string }>('/auth/login', { password }).then(r => r.data),
@@ -70,4 +82,10 @@ export const api = {
     http.put('/sim/config', b).then(r => r.data),
   setPower: (id: number, powered: boolean) =>
     http.post(`/sim/nodes/${id}/power`, { powered }).then(r => r.data),
+
+  radioPorts: () => http.get<SerialPort[]>('/radio/ports').then(r => r.data),
+  radioRead:  (port: string) =>
+    http.post<RadioReadResult>('/radio/read', { port }).then(r => r.data),
+  radioSetFrequency: (port: string, mhz: number) =>
+    http.post<RadioWriteResult>('/radio/frequency', { port, mhz }).then(r => r.data),
 }

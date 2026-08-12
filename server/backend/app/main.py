@@ -11,6 +11,7 @@ from .routers import auth as auth_router
 from .routers import deployments as deployments_router
 from .routers import nodes as nodes_router
 from .routers import posts as posts_router
+from .routers import radio as radio_router
 from .routers import schedules as schedules_router
 from .routers import sim as sim_router
 from .routers import stats as stats_router
@@ -74,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(deployments_router.router)
     app.include_router(schedules_router.router)
     app.include_router(stats_router.router)
+    app.include_router(radio_router.router)
 
     dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if dist.exists():  # 프론트 빌드 산출물이 있으면 단일 프로세스 데모 (스펙 §3)
