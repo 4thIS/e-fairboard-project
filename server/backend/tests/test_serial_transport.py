@@ -26,6 +26,21 @@ async def test_loopback_roundtrip_recovers_packet():
         await t.close()
 
 
+async def test_fixed_mode_prepends_envelope():
+    # 고정전송 모드: 쓴 바이트가 [FF FF 채널] 봉투 + 원본이어야 한다.
+    t = SerialTransport("loop://", 9600, fixed_channel=72)
+    try:
+        await t.write(b"\x01\x02\x03")
+        raw = bytearray()
+        for _ in range(50):
+            raw += await t.read()
+            if len(raw) >= 6:
+                break
+        assert bytes(raw) == bytes([0xFF, 0xFF, 72]) + b"\x01\x02\x03"
+    finally:
+        await t.close()
+
+
 async def test_idle_read_returns_empty_not_blocks():
     t = SerialTransport("loop://", 9600)
     try:

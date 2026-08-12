@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { api, type NodeInfo } from '../api'
 import { useDeployments } from '../stores/deployments'
+import { useNodes } from '../stores/nodes'
 import { usePosts } from '../stores/posts'
 import DeployOverlay from './DeployOverlay.vue'
 import EpaperPreview from './EpaperPreview.vue'
@@ -10,6 +11,7 @@ const props = defineProps<{ node: NodeInfo }>()
 defineEmits<{ edit: [node: NodeInfo] }>()
 
 const posts = usePosts()
+const nodes = useNodes()
 const deployments = useDeployments()
 const deploy = computed(() => deployments.byNode.get(props.node.id))
 const deploying = computed(() => deploy.value?.deployment.status === 'running')
@@ -22,6 +24,10 @@ const template = computed(() => {
 const currentPost = computed(() =>
   props.node.current_post_id == null ? null : posts.byId.get(props.node.current_post_id) ?? null)
 const offline = computed(() => props.node.status !== 'online')
+// 실물(serial) 모드에선 노드가 아직 응답 안 해도(offline) 배포를 눌러 전송할 수 있어야 한다.
+// 가상 데모에선 기존대로 offline 이면 막는다. (virtualMode===false = serial)
+const canEdit = computed(() =>
+  !deploying.value && (nodes.virtualMode === false || !offline.value))
 
 /* ponytail: 리튬 3.3~4.2V 선형 근사 — 실측 방전 곡선 나오면 보정 */
 const battPct = computed(() => {
@@ -84,7 +90,7 @@ async function ping() {
     </p>
 
     <div class="actions">
-      <button class="btn btn-primary grow" :disabled="offline || deploying" @click="$emit('edit', node)">
+      <button class="btn btn-primary grow" :disabled="!canEdit" @click="$emit('edit', node)">
         {{ currentPost ? '내용 수정' : '내용 등록' }}
       </button>
       <button class="btn" :disabled="pinging" @click="ping">PING</button>

@@ -14,13 +14,19 @@ from .base import Transport
 
 
 class SerialTransport(Transport):
-    def __init__(self, port: str, baud: int = 9600) -> None:
+    def __init__(self, port: str, baud: int = 9600,
+                 fixed_channel: int | None = None) -> None:
         # serial_for_url: 실물 'COM5' 도, 테스트 'loop://' 루프백도 같은 코드로 연다.
         # timeout=0.1 → read 가 최대 0.1초만 블록 → stop() 시 리더 태스크가 곧 풀린다.
         self._ser = serial.serial_for_url(port, baudrate=baud, timeout=0.1)
+        # fixed_channel 이 있으면 HAT 고정전송 모드 — 프레임마다 [FF FF 채널] 봉투를 앞에
+        # 붙여 브로드캐스트로 쏜다. 수신 모듈이 봉투를 떼고 프레임만 UART로 내보낸다.
+        # (대상 구분은 봉투 주소가 아니라 논리 패킷 DST 로 — PROTOCOL.md §0.)
+        self._envelope = (bytes([0xFF, 0xFF, fixed_channel])
+                          if fixed_channel is not None else b"")
 
     async def write(self, data: bytes) -> None:
-        await asyncio.to_thread(self._write, bytes(data))
+        await asyncio.to_thread(self._write, self._envelope + bytes(data))
 
     def _write(self, data: bytes) -> None:
         self._ser.write(data)
@@ -55,7 +61,9 @@ class SerialRig:
 
     @classmethod
     def build(cls, settings: Settings) -> "SerialRig":
-        transport = SerialTransport(settings.serial_port, settings.serial_baud)
+        channel = settings.serial_lora_channel if settings.serial_fixed_mode else None
+        transport = SerialTransport(settings.serial_port, settings.serial_baud,
+                                    fixed_channel=channel)
         link = LinkManager(transport, ack_timeout_s=settings.ack_timeout_s,
                            retries=settings.link_retries)
         return cls(link, transport)
