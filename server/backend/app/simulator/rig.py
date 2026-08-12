@@ -11,6 +11,8 @@ NODE_IDS = (0x01, 0x02)
 class SimRig:
     """가상 모드 전체 조립 — lifespan과 테스트가 공용 (스펙 §3)."""
 
+    virtual = True  # SerialRig(False)와 구분 — sim 라우터가 실물 모드를 거른다
+
     def __init__(self, link: LinkManager, gateway: VirtualGateway,
                  channel: VirtualChannel, nodes: dict[int, VirtualNode]) -> None:
         self.link = link
