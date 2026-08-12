@@ -22,6 +22,7 @@ function logout() {
         <span v-else class="err">○ 서버 응답 없음</span>
         <span v-if="nodes.virtualMode" class="badge">가상 모드</span>
         <span class="muted">온라인 {{ nodes.onlineCount }}/{{ nodes.list.length }}</span>
+        <router-link class="btn" to="/setup/radio">무선 설정</router-link>
         <button class="btn" @click="logout">로그아웃</button>
       </div>
     </header>
@@ -41,4 +42,5 @@ h1 { font-size: 16px; letter-spacing: 3px; }
   background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
   color: var(--busy); padding: 1px 6px; font-size: 11px;
 }
+a.btn { text-decoration: none; }
 </style>

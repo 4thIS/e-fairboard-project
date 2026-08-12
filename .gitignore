@@ -28,6 +28,9 @@ dist/
 # --- 개인 작업 폴더 (커밋하지 않음) ---
 .plan/
 
+# --- 호스트 미리보기 산출물 (tools/preview/build.sh) ---
+.preview/
+
 # --- 에디터/OS ---
 .vscode/
 .idea/
