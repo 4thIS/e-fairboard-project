@@ -6,6 +6,7 @@ const router = createRouter({
   routes: [
     { path: '/login', component: () => import('../views/LoginView.vue') },
     { path: '/', component: () => import('../views/DashboardView.vue') },
+    { path: '/setup/radio', component: () => import('../views/RadioSetupView.vue') },
   ],
 })
 
