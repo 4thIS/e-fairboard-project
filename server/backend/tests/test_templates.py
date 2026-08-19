@@ -70,39 +70,39 @@ def test_field_avail_w_shrinks_for_overlapping_row_only():
 def test_as_dict_carries_avail_w():
     data = as_dict()
     fields = data[0]["fields"]
-    assert fields[0]["avail_w"] == 776   # 제목, QR 미겹침 → 800-24
-    assert fields[1]["avail_w"] == 776   # 일시, 미겹침
+    assert fields[0]["avail_w"] == 1256   # 제목, QR 미겹침 → 1304-48
+    assert fields[1]["avail_w"] == 1256   # 일시, 미겹침
 
 
 def test_template_carries_its_own_canvas():
-    assert (TEMPLATES[0].canvas_w, TEMPLATES[0].canvas_h) == (800, 480)
+    assert (TEMPLATES[0].canvas_w, TEMPLATES[0].canvas_h) == (1304, 984)
 
 
 def test_field_avail_w_uses_the_given_canvas_not_a_global():
     """넘긴 캔버스 폭을 쓴다 — 전역이 새어 들어오면 미리보기가 거짓말을 한다."""
     tpl = TEMPLATES[0]
-    f = tpl.fields[0]  # 제목 x=24, y=32, 48px — QR(616,296,160)과 안 겹침
-    assert field_avail_w(f, tpl.qr, 800) == 776   # 800 - 24
-    assert field_avail_w(f, tpl.qr, 480) == 456   # 480 - 24
+    f = tpl.fields[0]  # 제목 x=48, y=48, 80px — QR(968,648,288)과 안 겹침
+    assert field_avail_w(f, tpl.qr, 1304) == 1256   # 1304 - 48
+    assert field_avail_w(f, tpl.qr, 984) == 936     # 984 - 48
 
 
 def test_as_dict_carries_canvas():
     data = as_dict()
-    assert data[0]["canvas"] == {"w": 800, "h": 480}
+    assert data[0]["canvas"] == {"w": 1304, "h": 984}
 
 
-def test_portrait_template_is_480x800():
+def test_portrait_template_is_984x1304():
     tpl = TEMPLATES[4]
-    assert (tpl.canvas_w, tpl.canvas_h) == (480, 800)
+    assert (tpl.canvas_w, tpl.canvas_h) == (984, 1304)
     assert tpl.name == "팀 소개"
 
 
-def test_portrait_fonts_are_48_header_32_body():
+def test_portrait_fonts_are_80_header_48_body():
     fs = [f.font_size for f in TEMPLATES[4].fields]
-    assert fs == [48, 32, 32, 32]   # 팀명 48, 주제 32
+    assert fs == [80, 48, 48, 48]   # 팀명 80, 주제 48
 
 
 def test_portrait_avail_w_is_the_narrow_canvas():
     tpl = TEMPLATES[4]
     for f in tpl.fields:
-        assert field_avail_w(f, tpl.qr, tpl.canvas_w) == 456, f.name  # 480-24
+        assert field_avail_w(f, tpl.qr, tpl.canvas_w) == 936, f.name  # 984-48

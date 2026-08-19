@@ -22,4 +22,4 @@ export interface TemplateDef {
 }
 
 /** 표시할 템플릿이 없을 때(미배포 노드) 그리는 빈 화면의 크기. */
-export const DEFAULT_CANVAS: Canvas = { w: 800, h: 480 }
+export const DEFAULT_CANVAS: Canvas = { w: 1304, h: 984 }
