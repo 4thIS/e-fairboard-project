@@ -1,18 +1,21 @@
 """무선 셋업 — PC HAT 주파수(채널) 설정 도구 (브링업 편의).
 
-서버 최초의 실제 pyserial 코드. 미구현 SerialTransport 에 묶지 않고 독립 유틸로
-둔다. 요청마다 포트를 on-demand 로 열고 닫으며, 모듈 Lock 으로 직렬화한다.
-설정 모드(M1 점퍼 빼기) 에서만 응답하므로 read 가 설정모드 감지기 역할을 한다.
+요청마다 포트를 on-demand 로 열고 닫으며, 모듈 Lock 으로 직렬화한다. 설정 모드(M1 점퍼
+빼기) 에서만 응답하므로 read 가 설정모드 감지기 역할을 한다.
+
+실물(serial) 모드에선 백엔드 SerialTransport 가 같은 COM 을 상시 점유한다 → 설정 중엔
+그 포트를 잠깐 빌린다(_borrow_port). 설정 모드에선 HAT 이 어차피 전송을 못 하므로 안전하다.
 """
 import threading
 import time
+from contextlib import contextmanager
 
 import serial
 from serial.tools import list_ports
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..deps import require_token
+from ..deps import get_rig, require_token
 from ..radio import e22
 
 router = APIRouter(prefix="/api/radio", tags=["radio"],
@@ -21,6 +24,21 @@ router = APIRouter(prefix="/api/radio", tags=["radio"],
 _lock = threading.Lock()          # 포트 동시 open 방지 (직렬화)
 _BAUD = 9600                      # 설정 모드 UART 고정
 _NO_CONFIG_HINT = "설정 모드 아님 — M1 점퍼를 빼고(HIGH) 다시 시도하세요"
+
+
+@contextmanager
+def _borrow_port(rig):
+    """serial 모드면 백엔드가 잡은 COM 포트를 잠깐 놓아준다(설정 후 되잡음). 가상/미실행이면 통과."""
+    transport = getattr(rig, "transport", None)
+    if transport is not None and hasattr(transport, "release"):
+        transport.release()
+        time.sleep(0.15)  # 진행 중이던 read(≤0.1s)가 풀리고 OS 가 포트를 놓을 시간
+        try:
+            yield
+        finally:
+            transport.reacquire()
+    else:
+        yield
 
 
 class PortReq(BaseModel):
@@ -64,8 +82,8 @@ def list_serial_ports() -> list[dict]:
 
 
 @router.post("/read")
-def read_registers(req: PortReq) -> dict:
-    with _lock:
+def read_registers(req: PortReq, rig=Depends(get_rig)) -> dict:
+    with _lock, _borrow_port(rig):
         ser = _open(req.port)
         try:
             reg = _read_registers(ser)
@@ -77,14 +95,14 @@ def read_registers(req: PortReq) -> dict:
 
 
 @router.post("/frequency")
-def set_frequency(req: FreqReq) -> dict:
+def set_frequency(req: FreqReq, rig=Depends(get_rig)) -> dict:
     ch = e22.mhz_to_channel(req.mhz)
     if not (e22.CH_MIN <= ch <= e22.CH_MAX):
         raise HTTPException(
             status_code=422,
             detail=f"{req.mhz}MHz(채널 {ch}) 는 범위 밖입니다 "
                    f"({e22.channel_to_mhz(e22.CH_MIN)}~{e22.channel_to_mhz(e22.CH_MAX)}MHz)")
-    with _lock:
+    with _lock, _borrow_port(rig):
         ser = _open(req.port)
         try:
             before = _read_registers(ser)
