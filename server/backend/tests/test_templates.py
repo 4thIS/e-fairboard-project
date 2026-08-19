@@ -19,11 +19,11 @@ def test_max_bytes_fits_set_field_payload():
             assert 0 < f.max_bytes <= 198  # SET_FIELD text 한도 (200-2)
 
 
-def test_font_size_is_multiple_of_16():
-    # 노드 폰트가 16×16 비트맵이라 정수 배율만 가능 (16/32/48/64px).
+def test_font_size_is_multiple_of_32():
+    # 노드 폰트가 32×32 비트맵(GLYPH_CELL=32)이라 정수 배율만 가능 (32/64/96/128px).
     for tpl in TEMPLATES.values():
         for f in tpl.fields:
-            assert f.font_size % 16 == 0 and f.font_size >= 16, \
+            assert f.font_size % 32 == 0 and f.font_size >= 32, \
                 f"{tpl.name}/{f.name} = {f.font_size}px"
 
 
@@ -97,9 +97,9 @@ def test_portrait_template_is_984x1304():
     assert tpl.name == "팀 소개"
 
 
-def test_portrait_fonts_are_80_header_48_body():
+def test_portrait_fonts_are_96_header_64_body():
     fs = [f.font_size for f in TEMPLATES[4].fields]
-    assert fs == [80, 48, 48, 48]   # 팀명 80, 주제 48
+    assert fs == [96, 64, 64, 64]   # 팀명 96, 주제 64
 
 
 def test_portrait_avail_w_is_the_narrow_canvas():
