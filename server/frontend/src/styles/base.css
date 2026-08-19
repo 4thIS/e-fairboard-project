@@ -1,9 +1,3 @@
-@font-face {
-  font-family: 'NeoDunggeunmo';
-  src: url('/fonts/NeoDunggeunmo.woff2') format('woff2');
-  font-display: block;   /* 미리보기 글자가 폴백 폰트로 먼저 그려지면 안 된다 */
-}
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -13,11 +7,10 @@ body {
   font-size: 14px;
 }
 
-/* 픽셀 폰트 — 미리보기 내부 전용. 보간 금지 (스펙: 노드와 픽셀 동일) */
+/* 미리보기 글자 — 노드가 32px 나눔고딕(벡터)로 전환 → 웹도 매끈한 한글 산세리프로.
+   나눔고딕 woff2 를 번들하면 정확히 일치(후속). 지금은 나눔고딕 있으면 그걸, 없으면 시스템 산세리프. */
 .pix {
-  font-family: 'NeoDunggeunmo', monospace;
-  -webkit-font-smoothing: none;
-  font-smooth: never;
+  font-family: 'NanumGothic', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 }
 
 .btn {
