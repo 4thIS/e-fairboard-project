@@ -9,9 +9,11 @@
 실측 골든벡터: `00 00 00 62 E0 12 43 00 00` → ch18 = 868MHz(공장기본, EU).
 """
 
-BASE_MHZ = 850  # E22-900: freq = 850 + channel
-HW_MIN = 850    # 하드웨어 허용 하한
-HW_MAX = 930    # 하드웨어 허용 상한
+BASE_MHZ = 850.125  # E22-900: freq = 850.125 + channel (EBYTE 데이터시트)
+CH_MIN = 0
+CH_MAX = 80         # E22-900 채널 범위 → freq 850.125 ~ 930.125
+HW_MIN = 850        # 표시용 하한
+HW_MAX = 930        # 표시용 상한
 KR920 = (920.9, 923.3)  # 국내 920MHz ISM 대역(권장 범위)
 
 _CH = 5  # 9바이트 레지스터에서 채널 바이트 위치
@@ -26,12 +28,13 @@ _SUBPACKET = {0x00: 240, 0x40: 128, 0x80: 64, 0xC0: 32}
 _POWER = {0x00: 22, 0x01: 17, 0x02: 13, 0x03: 10}
 
 
-def channel_to_mhz(ch: int) -> int:
-    return BASE_MHZ + ch
+def channel_to_mhz(ch: int) -> float:
+    return round(BASE_MHZ + ch, 3)
 
 
-def mhz_to_channel(mhz: int) -> int:
-    return int(mhz) - BASE_MHZ
+def mhz_to_channel(mhz: float) -> int:
+    # 채널은 정수 → 입력 MHz 를 가장 가까운 채널로 반올림 (예: 922.125·922 둘 다 채널 72)
+    return round(mhz - BASE_MHZ)
 
 
 def build_read_cmd() -> bytes:
@@ -75,10 +78,11 @@ def in_kr920(mhz: float) -> bool:
 
 if __name__ == "__main__":  # 골든벡터 셀프체크
     gv = bytes.fromhex("000000" "62E0" "12" "43" "0000")  # 실측 공장기본
-    assert channel_to_mhz(18) == 868 and channel_to_mhz(72) == 922
-    assert mhz_to_channel(922) == 72 and mhz_to_channel(868) == 18
+    assert channel_to_mhz(18) == 868.125 and channel_to_mhz(72) == 922.125
+    assert mhz_to_channel(922.125) == 72 and mhz_to_channel(868.125) == 18
+    assert mhz_to_channel(922) == 72  # 정수 입력도 가장 가까운 채널로
     d = decode_registers(gv)
-    assert d["channel"] == 18 and d["freq_mhz"] == 868, d
+    assert d["channel"] == 18 and d["freq_mhz"] == 868.125, d
     assert d["uart_bps"] == 9600 and d["air_bps"] == 2400, d
     assert d["power_dbm"] == 22, d
     # 채널만 바뀌고 나머지 보존
@@ -86,5 +90,5 @@ if __name__ == "__main__":  # 골든벡터 셀프체크
     assert w[:3] == bytes([0xC0, 0x00, 0x09])
     assert w[3 + _CH] == 72
     assert w[3:3 + _CH] == gv[:_CH] and w[3 + _CH + 1:] == gv[_CH + 1:]
-    assert not in_kr920(868) and in_kr920(922)
+    assert not in_kr920(868.125) and in_kr920(922.125)
     print("e22 self-check OK")

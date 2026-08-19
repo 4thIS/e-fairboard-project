@@ -3,14 +3,14 @@ import { computed, onMounted, ref } from 'vue'
 import { api, type SerialPort, type RadioRegisters, type RadioWriteResult } from '../api'
 import { errorMessage } from '../api/client'
 
-const HW_MIN = 850, HW_MAX = 930
+const HW_MIN = 850, HW_MAX = 930.125   // E22-900: 850.125 + 채널(0~80)
 const KR_LO = 920.9, KR_HI = 923.3
 
 const ports = ref<SerialPort[]>([])
 const port = ref('')
 const registers = ref<RadioRegisters | null>(null)   // 직전 읽기 성공값 = 설정모드 확인 = 쓰기 인터록
 const readHint = ref('')                              // 설정모드 아님 안내
-const targetMhz = ref(922)
+const targetMhz = ref(922.125)   // KR920 채널 72 (E22 실제 표기)
 const writeResult = ref<RadioWriteResult | null>(null)
 const message = ref('')
 const busy = ref(false)
@@ -130,7 +130,7 @@ onMounted(loadPorts)
       <label for="mhz">목표 주파수 (MHz)</label>
       <div class="row">
         <input id="mhz" class="input" :class="{ invalid: !mhzValid }" type="number"
-               v-model.number="targetMhz" :min="HW_MIN" :max="HW_MAX" step="1" />
+               v-model.number="targetMhz" :min="HW_MIN" :max="HW_MAX" step="0.125" />
         <button class="btn btn-primary" :disabled="!canWrite" @click="confirming = true">
           설정 쓰기
         </button>

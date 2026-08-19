@@ -29,7 +29,7 @@ class PortReq(BaseModel):
 
 class FreqReq(BaseModel):
     port: str
-    mhz: int
+    mhz: float  # 922.125 등 소수점 허용 — 가장 가까운 채널로 반올림
 
 
 def _read_registers(ser: serial.Serial) -> bytes | None:
@@ -78,10 +78,12 @@ def read_registers(req: PortReq) -> dict:
 
 @router.post("/frequency")
 def set_frequency(req: FreqReq) -> dict:
-    if not (e22.HW_MIN <= req.mhz <= e22.HW_MAX):
+    ch = e22.mhz_to_channel(req.mhz)
+    if not (e22.CH_MIN <= ch <= e22.CH_MAX):
         raise HTTPException(
             status_code=422,
-            detail=f"{req.mhz}MHz 는 하드웨어 범위({e22.HW_MIN}~{e22.HW_MAX}) 밖입니다")
+            detail=f"{req.mhz}MHz(채널 {ch}) 는 범위 밖입니다 "
+                   f"({e22.channel_to_mhz(e22.CH_MIN)}~{e22.channel_to_mhz(e22.CH_MAX)}MHz)")
     with _lock:
         ser = _open(req.port)
         try:
