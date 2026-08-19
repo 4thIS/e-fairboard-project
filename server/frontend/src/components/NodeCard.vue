@@ -85,8 +85,8 @@ async function ping() {
       <span class="name">NODE 0x{{ node.id.toString(16).padStart(2, '0').toUpperCase() }} · {{ node.name }}</span>
       <span v-if="deploying" class="busy">◈ 배포 중</span>
       <span v-else-if="deployFailed" class="err">✕ 실패</span>
-      <span v-else-if="!offline" class="ok">● ONLINE</span>
-      <span v-else class="err">○ OFFLINE</span>
+      <span v-else-if="!offline" class="ok">● 마지막 응답 성공</span>
+      <span v-else class="err">○ 응답없음</span>
     </div>
 
     <p class="tele" :class="{ err: offline }">

@@ -21,7 +21,7 @@ function logout() {
         <span v-if="nodes.connected" class="ok">● 서버 연결됨</span>
         <span v-else class="err">○ 서버 응답 없음</span>
         <span v-if="nodes.virtualMode" class="badge">가상 모드</span>
-        <span class="muted">온라인 {{ nodes.onlineCount }}/{{ nodes.list.length }}</span>
+        <span class="muted">응답 {{ nodes.onlineCount }}/{{ nodes.list.length }}</span>
         <router-link class="btn" to="/setup/radio">무선 설정</router-link>
         <button class="btn" @click="logout">로그아웃</button>
       </div>
