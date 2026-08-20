@@ -5,8 +5,8 @@
 
 namespace node {
 
-// 크기별(40/56/72px) native 베이크 폰트 — 확대 없음 (폰트 렌더 V2 §A).
-// 고정폭: 한글 = 전각(advance=셀), ASCII = 반각(advance=셀/2).
+// 크기별(40/56/72px) native 베이크 폰트 — 확대 없음.
+// 비례폭: 글자마다 전진폭이 다르다 (나눔스퀘어, 폰트 렌더 V3).
 //
 // 가장 큰 셀의 글립 크기(72px → 72²/8 = 648B). 크기를 키울 때 이 값을 같이 올리지 않으면
 // BakedFont::add() 가 bin 을 거부해 화면에 글자가 하나도 안 나온다 (2026-08-20 실측).
@@ -17,7 +17,7 @@ constexpr uint8_t FONT_SET_MAX = 3;
 struct IGlyphSource {
     virtual ~IGlyphSource() = default;
     // px 크기 셋에서 cp 글립. 없는 글자면 false. cell_px 는 실제 선택된 셀(요청 px 에 맞는
-    // 셋이 없으면 작은 셋으로 대체될 수 있다), advance_px 는 cell(한글)/cell÷2(ASCII).
+    // 셋이 없으면 작은 셋으로 대체될 수 있다), advance_px 는 그 글자의 전진폭(비례폭).
     virtual bool glyph(uint8_t px, uint32_t cp, uint8_t out[MAX_GLYPH_BYTES], uint8_t& cell_px,
                        uint8_t& advance_px) = 0;
 };
@@ -25,22 +25,25 @@ struct IGlyphSource {
 // tools/gen_font.py 가 만든 efb_common*.bin 을 읽는 글립 소스. 크기별 bin 을 add() 로
 // 등록한다 (ESP32 rodata 는 그냥 포인터로 읽힌다 — pgmspace 불필요).
 //
-// bin 포맷 (리틀엔디언 u16): cell, glyph_bytes, ascii_n, hangul_n,
-//   hangul_cps[hangul_n](오름차순), glyphs[(ascii_n+hangul_n)×glyph_bytes].
-// 상용 2,350자 서브셋 — 밖의 희귀 음절은 서버 입력검증(schemas.py)이 1차 방어.
+// bin 포맷: u16 cell, glyph_bytes, ascii_n, hangul_n / u16 hangul_cps[hangul_n](오름차순)
+//   / u8 advance[ascii_n+hangul_n] / glyphs[(ascii_n+hangul_n)×glyph_bytes].
+// advance 는 assets/font_advance.json 에서 온다 — 웹 미리보기와 같은 기준이라 간격이
+// 어긋나지 않는다. 노드가 다시 계산하면 기준이 둘이 된다.
+// 자주쓰는 2,000자 — 밖의 드문 음절은 서버 입력검증(schemas.py)이 1차 방어.
 class BakedFont : public IGlyphSource {
 public:
     // 헤더가 어긋나면 false — 잘못된 bin 으로 글립 밖을 읽지 않기 위해.
     bool add(const uint8_t* bin, size_t len);
 
-    // 요청 px 와 같은 셀을 쓰고, 없으면 px 이하 최대 셋으로 낮춘다 — 서버 플립 전
-    // 과도기(96/128 요청)에도 화면이 비지 않게 (넘쳐서 잘리는 것보다 작게, 이슈 #12).
+    // 요청 px 와 같은 셀을 쓰고, 없으면 px 이하 최대 셋으로 낮춘다 — 크기가 어긋나도
+    // 화면이 비지 않게 (넘쳐서 잘리는 것보다 작게, 이슈 #12).
     bool glyph(uint8_t px, uint32_t cp, uint8_t out[MAX_GLYPH_BYTES], uint8_t& cell_px,
                uint8_t& advance_px) override;
 
 private:
     struct Set {
-        const uint8_t* cps;     // u16 LE × hangul_n
+        const uint8_t* cps;      // u16 LE × hangul_n
+        const uint8_t* advance;  // u8 × (ascii_n + hangul_n)
         const uint8_t* glyphs;
         size_t glyphs_len;
         uint16_t cell, glyph_bytes, ascii_n, hangul_n;

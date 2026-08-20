@@ -83,27 +83,28 @@ void test_corrupt_bin_is_rejected() {
 }
 
 // 한글은 UTF-8 3바이트다 — 바이트 단위로 잘리면 안 된다 (이슈 #12의 원인).
-// 고정폭: 한글 = 전각(advance = px).
-void test_hangul_is_fullwidth_native() {
+void test_hangul_is_decoded_and_rastered() {
     Canvas c;
     const int16_t w = node::draw_utf8(c, g_font, 0, 0, "\xED\x95\x9C", 72, c.W);  // "한"
 
-    TEST_ASSERT_EQUAL_INT16(72, w);
+    TEST_ASSERT_EQUAL_INT16(66, w);  // font_advance.json 의 '한' 72px 전진폭
     TEST_ASSERT_GREATER_THAN_INT(0, c.count);
     TEST_ASSERT_LESS_THAN_INT16(72, c.max_row());  // px 셀 안에 들어온다
 }
 
-// ASCII = 반각(advance = px/2) — 서버 field_avail_w·웹 clip() 폭 모델과 동기.
-void test_ascii_is_halfwidth() {
-    TEST_ASSERT_EQUAL_INT16(36, width_of("A", 72));
-    TEST_ASSERT_EQUAL_INT16(72, width_of("AB", 72));
-    TEST_ASSERT_EQUAL_INT16(108, width_of("A\xED\x95\x9C", 72));  // 36 + 72
+// 비례폭 — 글자마다 전진폭이 다르다 (V3). 값의 정본은 assets/font_advance.json 이고
+// 웹 미리보기도 같은 파일을 쓴다 — 여기서 다시 계산하면 판넬과 미리보기가 어긋난다.
+void test_proportional_advance() {
+    TEST_ASSERT_EQUAL_INT16(19, width_of("i", 72));   // 좁은 글자
+    TEST_ASSERT_EQUAL_INT16(70, width_of("W", 72));   // 넓은 글자
+    TEST_ASSERT_EQUAL_INT16(89, width_of("iW", 72));  // 문자열 폭 = 전진폭의 합
+    TEST_ASSERT_EQUAL_INT16(114, width_of("A\xED\x95\x9C", 72));  // 'A' 48 + '한' 66
 }
 
 // 요청 px 셋이 없으면 px 이하 최대 셋으로 낮춰 native 로 그린다 — 화면이 비지 않게.
 void test_missing_size_falls_back_to_smaller_native() {
-    TEST_ASSERT_EQUAL_INT16(40, width_of("\xED\x95\x9C", 56));  // 56 미등록 → 40 셋
-    TEST_ASSERT_EQUAL_INT16(72, width_of("\xED\x95\x9C", 128));  // 128 → 72 셋
+    TEST_ASSERT_EQUAL_INT16(36, width_of("\xED\x95\x9C", 56));   // 56 미등록 → 40 셋의 '한'
+    TEST_ASSERT_EQUAL_INT16(66, width_of("\xED\x95\x9C", 128));  // 128 → 72 셋의 '한'
 }
 
 // 필드 폭을 넘는 텍스트는 잘라낸다 — 캔버스를 밟으면 안 된다.
@@ -111,10 +112,10 @@ void test_text_wider_than_field_is_clipped() {
     Canvas c;
     node::draw_utf8(c, g_font, 0, 0, "가가가가가가가가", 72, /*max_w=*/200);
 
-    TEST_ASSERT_LESS_OR_EQUAL_INT16(144, c.filled_width());  // 72×2 까지만
+    TEST_ASSERT_LESS_OR_EQUAL_INT16(204, c.filled_width());  // 66×3=198 까지 (셀 폭 여유 포함)
 }
 
-// 서브셋 밖 글자('뷁' — KS X 1001 상용 밖)는 자리도 주지 않는다. 1차 방어는 서버 입력검증.
+// 목록 밖 글자('뷁' — 자주쓰는 2,000자 밖)는 자리도 주지 않는다. 1차 방어는 서버 입력검증.
 void test_glyph_outside_subset_is_skipped() {
     TEST_ASSERT_EQUAL_INT16(width_of("AA", 72), width_of("A\xEB\xB7\x81" "A", 72));  // "A뷁A"
 }
@@ -129,8 +130,8 @@ int main() {
     RUN_TEST(test_font_bins_load);
     RUN_TEST(test_corrupt_bin_is_rejected);
     if (!g_bin40 || !g_bin72) return UNITY_END();
-    RUN_TEST(test_hangul_is_fullwidth_native);
-    RUN_TEST(test_ascii_is_halfwidth);
+    RUN_TEST(test_hangul_is_decoded_and_rastered);
+    RUN_TEST(test_proportional_advance);
     RUN_TEST(test_missing_size_falls_back_to_smaller_native);
     RUN_TEST(test_text_wider_than_field_is_clipped);
     RUN_TEST(test_glyph_outside_subset_is_skipped);

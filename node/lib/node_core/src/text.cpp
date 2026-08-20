@@ -56,11 +56,13 @@ bool BakedFont::add(const uint8_t* bin, size_t len) {
         s.glyph_bytes > MAX_GLYPH_BYTES) {
         return false;
     }
+    const size_t count = (size_t)s.ascii_n + s.hangul_n;
     const size_t table = (size_t)s.hangul_n * 2;
-    const size_t glyphs = (size_t)(s.ascii_n + s.hangul_n) * s.glyph_bytes;
-    if (len < 8 + table + glyphs) return false;
+    const size_t glyphs = count * s.glyph_bytes;
+    if (len < 8 + table + count + glyphs) return false;
     s.cps = bin + 8;
-    s.glyphs = bin + 8 + table;
+    s.advance = bin + 8 + table;
+    s.glyphs = bin + 8 + table + count;
     s.glyphs_len = glyphs;
 
     sets_[set_count_++] = s;
@@ -87,9 +89,8 @@ bool BakedFont::glyph(uint8_t px, uint32_t cp, uint8_t out[MAX_GLYPH_BYTES], uin
     size_t index;
     if (cp >= 0x20 && cp < 0x20u + s->ascii_n) {
         index = cp - 0x20;
-        advance_px = static_cast<uint8_t>(s->cell / 2);  // ASCII 반각
     } else {
-        // 상용 한글 — 오름차순 코드포인트 표를 이진탐색
+        // 자주쓰는 한글 — 오름차순 코드포인트 표를 이진탐색
         size_t lo = 0, hi = s->hangul_n;
         while (lo < hi) {
             const size_t mid = (lo + hi) / 2;
@@ -102,8 +103,8 @@ bool BakedFont::glyph(uint8_t px, uint32_t cp, uint8_t out[MAX_GLYPH_BYTES], uin
         }
         if (lo >= s->hangul_n || rd16(s->cps + lo * 2) != cp) return false;
         index = (size_t)s->ascii_n + lo;
-        advance_px = static_cast<uint8_t>(s->cell);  // 한글 전각
     }
+    advance_px = s->advance[index];  // 비례폭 — font_advance.json 이 정한 값 (V3)
 
     const size_t off = index * s->glyph_bytes;
     if (off + s->glyph_bytes > s->glyphs_len) return false;
@@ -127,11 +128,13 @@ int16_t draw_utf8(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, con
         if (!font.glyph(px, cp, bits, cell, advance)) continue;  // 없는 글자는 자리도 안 준다
 
         const int16_t w = advance;
-        if (pen + w > max_w) break;  // 필드 폭 초과 — 잘라낸다
+        if (pen + w > max_w) break;  // 필드 폭 초과 — 잘라낸다 (전진폭 기준, 서버와 동일)
 
+        // 글립은 cell×cell 좌측 정렬이고 advance 는 그보다 좁을 수 있다 — 셀 전체를 훑어야
+        // advance 를 넘는 획이 안 잘린다. 남는 오른쪽은 비어 있어 다음 글자가 그 위에 얹힌다.
         const uint8_t row_bytes = cell / 8;
         for (uint8_t gy = 0; gy < cell; ++gy) {
-            for (uint8_t gx = 0; gx < advance; ++gx) {
+            for (uint8_t gx = 0; gx < cell; ++gx) {
                 const uint8_t byte = bits[(size_t)gy * row_bytes + (gx >> 3)];
                 if (!(byte & (0x80 >> (gx & 7)))) continue;
                 canvas.pixel(x + pen + gx, y + gy);
