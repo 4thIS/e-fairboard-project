@@ -19,11 +19,12 @@ def test_max_bytes_fits_set_field_payload():
             assert 0 < f.max_bytes <= 198  # SET_FIELD text 한도 (200-2)
 
 
-def test_font_size_is_multiple_of_32():
-    # 노드 폰트가 32×32 비트맵(GLYPH_CELL=32)이라 정수 배율만 가능 (32/64/96/128px).
+def test_font_size_is_sane_pixel_height():
+    # font_size 는 실제 px 높이 (노드 stb_truetype native 래스터, 폰트 렌더 V2).
+    # 정수 배율 제약은 없앴다 — 읽히는 최소·버퍼 안전 상한만 지킨다.
     for tpl in TEMPLATES.values():
         for f in tpl.fields:
-            assert f.font_size % 32 == 0 and f.font_size >= 32, \
+            assert 16 <= f.font_size <= 256, \
                 f"{tpl.name}/{f.name} = {f.font_size}px"
 
 
