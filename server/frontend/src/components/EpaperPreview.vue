@@ -2,7 +2,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import QRCode from 'qrcode'
 import { clip } from '../epaper/text'
-import { DEFAULT_CANVAS, type TemplateDef } from '../epaper/types'
+import { DEFAULT_CANVAS, type TemplateDef, type Color, type Fill } from '../epaper/types'
 
 const props = withDefaults(defineProps<{
   template: TemplateDef | null
@@ -31,6 +31,14 @@ const rows = computed(() => {
     return { f, text }   // clip() 이 이미 렌더 불가 글자를 거른다
   })
 })
+
+/** 색 이름 → CSS 변수. 노드 3색과 같은 매핑 (paper=밴드 위 흰 글자). */
+function inkVar(c: Color): string {
+  return c === 'red' ? 'var(--red)' : c === 'paper' ? 'var(--paper)' : 'var(--ink)'
+}
+function fillVar(c: Fill): string {
+  return c === 'red' ? 'var(--red)' : c === 'black' ? 'var(--ink)' : 'transparent'
+}
 
 /** QR — 노드와 같은 버전 선택(ECC L, 길이별). 담을 수 없으면 그리지 않는다. */
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
@@ -85,13 +93,29 @@ watchEffect(async () => {
       :style="{ width: canvas.w + 'px', height: canvas.h + 'px',
                 transform: `scale(${previewScale})` }"
     >
-      <!-- V2: 노드가 stb_truetype 로 native 크기에 비례폭 렌더 → 미리보기도 비례폭 자연 흐름.
-           font_size 는 실제 px 높이. 폭은 폰트 메트릭에 맡긴다(정확 일치는 woff2 번들 후속). -->
+      <!-- 장식(밴드·박스·룰선·격자) — 텍스트 뒤에 먼저 그린다. 선=얇은 fill 사각형. -->
+      <div
+        v-for="(d, i) in template?.decorations ?? []" :key="'d' + i"
+        class="deco"
+        :style="{ left: d.x + 'px', top: d.y + 'px', width: d.w + 'px', height: d.h + 'px',
+                  background: fillVar(d.fill),
+                  border: d.stroke !== 'none' ? d.stroke_w + 'px solid ' + fillVar(d.stroke) : undefined }"
+      ></div>
+
+      <!-- 고정 라벨 (일시·시간·SCAN 등) -->
+      <div
+        v-for="(l, i) in template?.labels ?? []" :key="'l' + i"
+        class="row pix"
+        :style="{ left: l.x + 'px', top: l.y + 'px',
+                  fontSize: l.font_size + 'px', lineHeight: l.font_size + 'px', color: inkVar(l.color) }"
+      >{{ l.text }}</div>
+
+      <!-- 편집 필드 — 나눔스퀘어 비례폭, 색은 필드별. -->
       <div
         v-for="r in rows" :key="r.f.id"
         class="row pix"
         :style="{ left: r.f.x + 'px', top: r.f.y + 'px',
-                  fontSize: r.f.font_size + 'px', lineHeight: r.f.font_size + 'px' }"
+                  fontSize: r.f.font_size + 'px', lineHeight: r.f.font_size + 'px', color: inkVar(r.f.color) }"
       >{{ r.text }}</div>
 
       <canvas
@@ -110,6 +134,7 @@ watchEffect(async () => {
   overflow: hidden;
 }
 .inner { position: relative; transform-origin: top left; }
+.deco { position: absolute; box-sizing: border-box; }
 .row { position: absolute; white-space: nowrap; color: var(--ink); }
 .qr { position: absolute; image-rendering: pixelated; }
 </style>

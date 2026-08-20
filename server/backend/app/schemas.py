@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator, model_validator
 
-from .protocol.templates import TEMPLATES
+from .protocol.templates import TEMPLATES, field_max_bytes
 
 _MAX_TEXT_BYTES = 198  # SET_FIELD/SET_QR text 한도 (Task 4와 동일)
 
@@ -32,6 +32,7 @@ class PostCreate(BaseModel):
         for key, text in self.fields.items():
             if key not in defs:
                 raise ValueError(f"template {self.template_id} has no field {key}")
-            if len(text.encode("utf-8")) > defs[key].max_bytes:
-                raise ValueError(f"field {key} exceeds {defs[key].max_bytes} bytes")
+            limit = field_max_bytes(defs[key], tpl.qr, tpl.canvas_w)
+            if len(text.encode("utf-8")) > limit:
+                raise ValueError(f"field {key} exceeds {limit} bytes")
         return self
