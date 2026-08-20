@@ -1,25 +1,33 @@
 /** 노드 렌더러(node_core BakedFont)와 **같은 규칙**.
  *
  * 미리보기가 노드와 다르게 그리면 시연의 주인공이 거짓말을 한다.
- * 이 파일을 고칠 때는 노드 폰트 규칙(gen_font.py / BakedFont)을 먼저 읽을 것.
  *
- * baked 폰트는 **고정폭**: 한글 = 전각(advance = font_px), ASCII = 반각(advance = font_px/2).
- * 폰트에 없는 글자는 그리지도, 자리를 주지도 않는다. font_px 는 실제 px(40/56/72).
+ * 비례폭(나눔스퀘어) — 글자별 advance 는 `font_advance.json`(tools/gen_font_advance.py 산출).
+ * 노드 gen_font.py 가 bin 에 넣는 값과 **같은 파일**을 여기서 import 한다 (단일 기준).
+ * baked 크기(40/56/72)만 테이블에 있다. 테이블에 없는 글자는 노드에도 없으니 자리도 안 준다.
  */
 
-/** 폰트에 있는 글자인가. ASCII(0x20~0x7E) + 완성형 한글(U+AC00~U+D7A3).
- *  (노드가 굽는 자주쓰는 2,000자 밖은 서버 입력검증이 막는다 — 그 플립 전까진 완성형 범위로 둔다.) */
+import advanceData from './font_advance.json'
+
+const SIZES: number[] = advanceData.sizes
+const ADV = advanceData.adv as Record<string, number[]>
+
+/** 노드 폰트에 있는 글자인가. ASCII + baked 한글(font_advance 테이블 = 자주쓰는 2,000자). */
 export function isRenderable(ch: string): boolean {
   const cp = ch.codePointAt(0)
   if (cp === undefined) return false
-  return (cp >= 0x20 && cp <= 0x7e) || (cp >= 0xac00 && cp <= 0xd7a3)
+  if (cp >= 0x20 && cp <= 0x7e) return true
+  return String(cp) in ADV
 }
 
-/** 글자 하나의 전진 폭(px). ASCII 반각(font_px/2), 한글 전각(font_px). */
+/** 글자 하나의 전진 폭(px). 비례폭 — baked advance 테이블에서. fontPx 는 40/56/72.
+ *  테이블에 없는 크기/글자는 전각(fontPx) 보수적 폴백. */
 export function advancePx(ch: string, fontPx: number): number {
+  const i = SIZES.indexOf(fontPx)
   const cp = ch.codePointAt(0)
-  const ascii = cp !== undefined && cp >= 0x20 && cp <= 0x7e
-  return ascii ? Math.floor(fontPx / 2) : fontPx
+  if (i < 0 || cp === undefined) return fontPx
+  const a = ADV[String(cp)]
+  return a ? a[i] : fontPx
 }
 
 /** 문자열이 실제로 차지하는 폭(px). 없는 글자는 폭 0. */
