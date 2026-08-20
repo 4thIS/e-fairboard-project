@@ -94,8 +94,9 @@ public:
 // 크기별 bin 3개를 든 베이크 폰트 — setup 에서 add() 로 등록.
 node::BakedFont g_font;
 
-// 3색 패널 전체 갱신은 ~18초(실측) — 서버 T_ack 안에 못 끝나므로 ACK는 렌더 전에 나간다
-// (상태머신이 send_ack 후 commit 하는 순서라 자동으로 그렇게 된다).
+// 3색 패널 전체 갱신은 ~18초(실측) — 서버 T_ack 안에 못 끝난다. 상태머신은 렌더를 먼저
+// 돌리고 ACK 를 나중에 보내므로(state_machine.cpp), 첫 COMMIT 은 타임아웃 나고 재전송에서
+// 성공한다. 중복 갱신은 멱등 키를 렌더 전에 찍어 막는다.
 class EpdDisplay : public node::IDisplay, public node::ICanvas {
 public:
     void pixel(int16_t x, int16_t y) override { epd.drawPixel(x, y, GxEPD_BLACK); }
