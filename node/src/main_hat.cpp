@@ -24,9 +24,13 @@
 #include <node/templates.h>
 #include <node/text.h>
 
-// 32px 한글 비트맵 (gen_font_data.py 생성 — main.cpp와 공유).
-extern const uint8_t EFB_HANGUL32[] PROGMEM;
-extern const size_t EFB_HANGUL32_LEN;
+// 32/48/64px 베이크 폰트 (gen_font_data.py 생성 — main.cpp와 공유). 폰트 렌더 V2 §A.
+extern const uint8_t EFB_COMMON32[];
+extern const size_t EFB_COMMON32_LEN;
+extern const uint8_t EFB_COMMON48[];
+extern const size_t EFB_COMMON48_LEN;
+extern const uint8_t EFB_COMMON64[];
+extern const size_t EFB_COMMON64_LEN;
 
 #ifndef EFB_NODE_ID
 #define EFB_NODE_ID 0x01
@@ -87,28 +91,8 @@ public:
     }
 };
 
-// main.cpp 의 ProgmemFont 와 동일 — UART 변형에서도 같은 비트맵을 쓴다.
-class ProgmemFont : public node::IGlyphSource {
-public:
-    bool glyph(uint32_t cp, uint8_t out[node::GLYPH_BYTES], uint8_t& advance_px) override {
-        size_t index;
-        if (cp >= 0x20 && cp <= 0x7E) {
-            index = cp - 0x20;
-            advance_px = 16;
-        } else if (cp >= 0xAC00 && cp <= 0xD7A3) {
-            index = 95 + (cp - 0xAC00);
-            advance_px = 32;
-        } else {
-            return false;
-        }
-        const size_t off = index * node::GLYPH_BYTES;
-        if (off + node::GLYPH_BYTES > EFB_HANGUL32_LEN) return false;
-        for (size_t i = 0; i < node::GLYPH_BYTES; ++i) {
-            out[i] = pgm_read_byte(EFB_HANGUL32 + off + i);
-        }
-        return true;
-    }
-};
+// 크기별 bin 3개를 든 베이크 폰트 — setup 에서 add() 로 등록.
+node::BakedFont g_font;
 
 // 3색 패널 전체 갱신은 ~18초(실측) — 서버 T_ack 안에 못 끝나므로 ACK는 렌더 전에 나간다
 // (상태머신이 send_ack 후 commit 하는 순서라 자동으로 그렇게 된다).
@@ -127,9 +111,8 @@ public:
             for (uint8_t i = 0; i < tpl->field_count; ++i) {
                 const node::FieldDef& f = tpl->fields[i];
                 if (f.id >= node::MAX_FIELDS || !s.has_field[f.id]) continue;
-                const uint8_t scale = node::scale_for(f.font_size);
-                const int16_t avail = node::field_avail_w(f, tpl->qr, scale);
-                node::draw_utf8(*this, font_, f.x, f.y, s.fields[f.id], scale, avail);
+                const int16_t avail = node::field_avail_w(f, tpl->qr, tpl->canvas_w);
+                node::draw_utf8(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, avail);
             }
             if (s.has_qr) draw_qr(s.qr_url, tpl->qr);
         } while (epd.nextPage());
@@ -143,13 +126,11 @@ public:
         epd.firstPage();
         do {
             epd.fillScreen(GxEPD_WHITE);
-            node::draw_utf8(*this, font_, 24, 24, msg, 2, 800 - 24);
+            node::draw_utf8(*this, g_font, 24, 24, msg, 48, 800 - 24);
         } while (epd.nextPage());
     }
 
 private:
-    ProgmemFont font_;
-
     void draw_qr(const char* url, const node::QrDef& box) {
         const size_t len = strlen(url);
         uint8_t version = 3;
@@ -242,6 +223,12 @@ void setup() {
     delay(50);
     Serial2.begin(LORA_BAUD, SERIAL_8N1, LORA_RX, LORA_TX);
     configureHat();
+
+    if (!g_font.add(EFB_COMMON32, EFB_COMMON32_LEN) ||
+        !g_font.add(EFB_COMMON48, EFB_COMMON48_LEN) ||
+        !g_font.add(EFB_COMMON64, EFB_COMMON64_LEN)) {
+        Serial.println("[font] 폰트 bin 헤더 불일치 — 텍스트는 그려지지 않는다");
+    }
 
     // 드라이버보드는 패널 SPI가 13/14에 고정 — 기본 VSPI(18/23) 대신 명시해야 한다.
     SPI.begin(EPD_SCK, -1, EPD_MOSI, EPD_CS);
