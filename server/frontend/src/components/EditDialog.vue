@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { NodeInfo, Post } from '../api'
 import { errorMessage } from '../api/client'
-import { clip, scaleFor, utf8Bytes } from '../epaper/text'
+import { clip, utf8Bytes } from '../epaper/text'
 import type { FieldDef } from '../epaper/types'
 import { useDeployments } from '../stores/deployments'
 import { usePosts } from '../stores/posts'
@@ -64,7 +64,7 @@ const clippedIds = computed(() => {
   const t = template.value
   if (!t) return new Set<number>()
   return new Set(t.fields
-    .filter(f => clip(form.fields[String(f.id)] ?? '', f.avail_w, scaleFor(f.font_size)).clipped)
+    .filter(f => clip(form.fields[String(f.id)] ?? '', f.avail_w, f.font_size).clipped)
     .map(f => f.id))
 })
 
