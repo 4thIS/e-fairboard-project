@@ -98,9 +98,16 @@ def test_portrait_template_is_984x1304():
     assert tpl.name == "팀 소개"
 
 
-def test_portrait_fonts_are_96_header_64_body():
+def test_portrait_fonts_are_64_header_48_body():
     fs = [f.font_size for f in TEMPLATES[4].fields]
-    assert fs == [96, 64, 64, 64]   # 팀명 96, 주제 64
+    assert fs == [64, 48, 48, 48]   # 팀명 64(큰), 주제 48(중간)
+
+
+def test_font_sizes_are_the_three_baked():
+    # 노드가 굽는 3크기(32/48/64)만 쓴다 (폰트 렌더 V2).
+    for tpl in TEMPLATES.values():
+        for f in tpl.fields:
+            assert f.font_size in (32, 48, 64), f"{tpl.name}/{f.name} = {f.font_size}px"
 
 
 def test_portrait_avail_w_is_the_narrow_canvas():
