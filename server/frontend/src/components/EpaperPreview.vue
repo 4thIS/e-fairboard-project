@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
 import QRCode from 'qrcode'
-import { clip, scaleFor } from '../epaper/text'
+import { clip } from '../epaper/text'
 import { DEFAULT_CANVAS, type TemplateDef } from '../epaper/types'
 
 const props = withDefaults(defineProps<{
@@ -27,7 +27,7 @@ const rows = computed(() => {
   if (!props.template) return []
   return props.template.fields.map((f) => {
     const raw = props.fields[String(f.id)] ?? ''
-    const { text } = clip(raw, f.avail_w, scaleFor(f.font_size))
+    const { text } = clip(raw, f.avail_w, f.font_size)
     return { f, text }   // clip() 이 이미 렌더 불가 글자를 거른다
   })
 })
