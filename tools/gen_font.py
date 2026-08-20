@@ -1,97 +1,93 @@
-"""Neo둥근모(SIL OFL 1.1) TTF 를 16px 1bpp 비트맵으로 구워 펌웨어용 바이너리를 만든다.
+# -*- coding: utf-8 -*-
+"""나눔고딕코딩을 32/48/64px 로 각각 native 래스터해 assets/efb_common*.bin 을 만든다.
 
-완성형 전체(U+AC00~U+D7A3, 11,172자) + ASCII(0x20~0x7E)를 담는다. 서브셋이 아니므로
-관리자가 어떤 한글을 쳐도 깨지지 않고, 서버 입력 검증(schemas.py)이 필요 없다.
+폰트 렌더 V2 (HANDOFF_FONT_RENDER_V2 §A): 16px 하나를 정수배 확대하던 방식은 큰 글씨가
+계단이 됐다 — 서버가 쓰는 세 크기(32/48/64)를 벡터에서 그 크기로 미리 구워 확대를 없앤다.
 
-글립 형식 — 전부 32바이트 고정:
-    16행 x 2바이트, MSB first. ASCII 는 왼쪽 8비트만 쓰고 advance 만 8px.
-    오프셋 = 색인 x 32.
+- 커버리지: ASCII 95자 + KS X 1001 상용한글 2,350자 (완성형 full 은 64px 기준 5.7MB 라
+  4MB 플래시에 불가). 상용 밖 희귀 음절은 서버 입력검증(schemas.py, 우진)이 막는다.
+- 한글 목록은 assets/common_hangul.txt 를 읽는다 — 굽기·서버 검증의 단일 기준
+  (tools/gen_common_hangul.py 산출물). 여기서 다시 계산하면 기준이 둘이 된다.
+- 고정폭: 한글 = 전각(advance = 크기), ASCII = 반각(advance = 크기/2) — 서버
+  field_avail_w·웹 clip() 폭 모델과 동기 (비례폭 금지).
+- 원본: 나눔고딕코딩(고정폭, SIL OFL 1.1 — assets/OFL.txt). 고정폭 폰트라 ASCII 가
+  정확히 반각 셀에 들어간다 — 나눔고딕 일반은 비례폭이라 W/m 이 잘린다.
 
-색인:
-    0        ~ 94     : ASCII 0x20 ~ 0x7E
-    95       ~ 11266  : 한글 U+AC00 ~ U+D7A3
+bin 포맷 (리틀엔디언 u16 헤더, node_core/text.cpp BakedFont 가 읽는다):
+  u16 cell_px, u16 glyph_bytes(=cell²/8), u16 ascii_n(=95), u16 hangul_n(=2350)
+  u16 hangul_cps[hangul_n]  (오름차순 — 노드가 이진탐색)
+  glyphs[(ascii_n+hangul_n) × glyph_bytes]  (ASCII 먼저, 행당 cell/8 바이트 MSB first)
 
-라이선스: 원본 폰트는 SIL OFL 1.1, Reserved Font Name "Neo둥근모"/"NeoDunggeunmo".
-파생 비트맵이므로 예약 이름을 쓰지 않고(efb_hangul16), OFL 사본을 함께 배포한다.
-
-실행: ~/venv/bin/python tools/gen_font.py
-출력: assets/efb_hangul16.bin, assets/OFL.txt
+사용: python tools/gen_font.py <NanumGothicCoding-Regular.ttf>
 """
 
+import struct
 import sys
-import urllib.request
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-ASSETS = ROOT / "assets"
-CACHE = ASSETS / ".cache"  # 원본 TTF — 커밋하지 않는다 (assets/.gitignore)
-
-TTF_URL = "https://github.com/neodgm/neodgm/releases/download/v1.601/neodgm.ttf"
-OFL_URL = "https://raw.githubusercontent.com/neodgm/neodgm/master/LICENSE.txt"
-
-CELL = 16          # 글립 셀 높이·최대 너비
-GLYPH_BYTES = 32   # 16행 x 2바이트
-
-ASCII_START, ASCII_END = 0x20, 0x7E
-HANGUL_START, HANGUL_END = 0xAC00, 0xD7A3
-
-ASCII_COUNT = ASCII_END - ASCII_START + 1        # 95
-HANGUL_COUNT = HANGUL_END - HANGUL_START + 1     # 11172
+SIZES = (32, 48, 64)
+ASCII_START, ASCII_END = 0x20, 0x7E  # 95자
 
 
-def fetch(url: str, dest: Path) -> Path:
-    if dest.exists():
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    print(f"downloading {url}")
-    urllib.request.urlretrieve(url, dest)
-    return dest
+def common_hangul() -> list[int]:
+    """assets/common_hangul.txt (tools/gen_common_hangul.py 산출물)의 상용한글 2,350자."""
+    src = ROOT / "assets" / "common_hangul.txt"
+    if not src.exists():
+        raise SystemExit(f"{src} 가 없습니다 — 먼저: python tools/gen_common_hangul.py")
+    cps = sorted(ord(c) for c in src.read_text(encoding="utf-8").strip())
+    if len(cps) != 2350:
+        raise SystemExit(f"상용 한글 {len(cps)}자 (기대 2,350) — 목록 재생성 필요")
+    return cps
 
 
-def rasterize(font: ImageFont.FreeTypeFont, ch: str) -> bytes:
-    """16x16 셀에 1bpp 로 굽는다. Neo둥근모는 16px 에서 픽셀 퍼펙트라 안티에일리어싱이 없다."""
-    img = Image.new("1", (CELL, CELL), 0)
-    ImageDraw.Draw(img).text((0, 0), ch, font=font, fill=1)
+def pick_font(ttf: Path, cell: int) -> tuple[ImageFont.FreeTypeFont, int]:
+    """ascent+descent 가 cell 이하가 되는 최대 포인트를 찾는다. 반환: (폰트, y오프셋)."""
+    for pt in range(cell + 8, 4, -1):
+        font = ImageFont.truetype(str(ttf), pt)
+        ascent, descent = font.getmetrics()
+        if ascent + descent <= cell:
+            return font, (cell - (ascent + descent)) // 2
+    raise SystemExit(f"{cell}px 셀에 맞는 포인트를 못 찾음")
 
-    out = bytearray(GLYPH_BYTES)
-    for y in range(CELL):
-        for x in range(CELL):
-            if img.getpixel((x, y)):
-                out[y * 2 + (x >> 3)] |= 0x80 >> (x & 7)  # MSB first
+
+def raster(font: ImageFont.FreeTypeFont, cell: int, y_off: int, ch: str) -> bytes:
+    """cell×cell 1bpp 글립 — 안티앨리어싱 후 커버리지 128 임계 (1비트 패널)."""
+    img = Image.new("L", (cell, cell), 0)
+    ImageDraw.Draw(img).text((0, y_off), ch, font=font, fill=255)
+    row_bytes = cell // 8
+    out = bytearray(cell * row_bytes)
+    px = img.load()
+    for y in range(cell):
+        for x in range(cell):
+            if px[x, y] >= 128:
+                out[y * row_bytes + (x >> 3)] |= 0x80 >> (x & 7)
     return bytes(out)
 
 
 def main() -> None:
-    ttf = fetch(TTF_URL, CACHE / "neodgm.ttf")
-    font = ImageFont.truetype(str(ttf), CELL)
+    if len(sys.argv) != 2:
+        raise SystemExit(__doc__)
+    ttf = Path(sys.argv[1])
+    cps = common_hangul()
 
-    ASSETS.mkdir(parents=True, exist_ok=True)
-    fetch(OFL_URL, ASSETS / "OFL.txt")
+    for cell in SIZES:
+        font, y_off = pick_font(ttf, cell)
+        glyphs = bytearray()
+        for cp in range(ASCII_START, ASCII_END + 1):
+            glyphs += raster(font, cell, y_off, chr(cp))
+        for cp in cps:
+            glyphs += raster(font, cell, y_off, chr(cp))
 
-    blob = bytearray()
-    blank = 0
-
-    for cp in range(ASCII_START, ASCII_END + 1):
-        blob += rasterize(font, chr(cp))
-    for cp in range(HANGUL_START, HANGUL_END + 1):
-        g = rasterize(font, chr(cp))
-        if not any(g):
-            blank += 1
-        blob += g
-
-    expected = (ASCII_COUNT + HANGUL_COUNT) * GLYPH_BYTES
-    if len(blob) != expected:
-        sys.exit(f"크기 불일치: {len(blob)} != {expected}")
-
-    out = ASSETS / "efb_hangul16.bin"
-    out.write_bytes(blob)
-
-    print(f"wrote {out.relative_to(ROOT)}")
-    print(f"  ASCII  {ASCII_COUNT:>6}자")
-    print(f"  한글   {HANGUL_COUNT:>6}자  (빈 글립 {blank})")
-    print(f"  합계   {len(blob):>6,} B  = {len(blob) / 1024:.0f} KB")
+        out = ROOT / "assets" / f"efb_common{cell}.bin"
+        gbytes = cell * cell // 8
+        header = struct.pack("<4H", cell, gbytes, 95, len(cps))
+        table = struct.pack(f"<{len(cps)}H", *cps)
+        out.write_bytes(header + table + glyphs)
+        print(f"{out.name}: {out.stat().st_size:,} B "
+              f"({font.size}pt, y_off {y_off}, 글립 {95 + len(cps)}개 × {gbytes}B)")
 
 
 if __name__ == "__main__":

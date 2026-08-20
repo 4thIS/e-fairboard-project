@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unity.h>
 
@@ -8,30 +10,27 @@ void tearDown() {}
 
 namespace {
 
-// 오른쪽 절반이 빈 8px 글립(ASCII)과 꽉 찬 16px 글립(한글)만 아는 가짜 폰트.
-// 실제 폰트 데이터 없이 배치·배율·advance 만 검증한다.
-struct FakeFont : node::IGlyphSource {
-    bool glyph(uint32_t cp, uint8_t out[node::GLYPH_BYTES], uint8_t& advance_px) override {
-        memset(out, 0, node::GLYPH_BYTES);
-        if (cp == '?') return false;  // 없는 글자
+// 실제 bin(assets/efb_common*.bin)을 읽어 진짜 데이터를 검증한다 — 가짜 폰트로는
+// 헤더 파싱·이진탐색·서브셋 커버리지를 못 잡는다. pio test 는 node/ 에서 돈다.
+uint8_t* g_bin32 = nullptr;
+uint8_t* g_bin64 = nullptr;
+node::BakedFont g_font;
 
-        if (cp < 0x80) {
-            advance_px = 8;
-            for (int y = 0; y < 16; ++y) out[y * 2] = 0xFF;  // 왼쪽 8px 만 채움
-        } else {
-            advance_px = 16;
-            for (int y = 0; y < 16; ++y) {
-                out[y * 2] = 0xFF;
-                out[y * 2 + 1] = 0xFF;  // 16px 전부 채움
-            }
-        }
-        return true;
-    }
-};
+uint8_t* load(const char* path, size_t& len) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return nullptr;
+    fseek(f, 0, SEEK_END);
+    len = (size_t)ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t* buf = (uint8_t*)malloc(len);
+    const bool ok = buf && fread(buf, 1, len, f) == len;
+    fclose(f);
+    return ok ? buf : nullptr;
+}
 
 struct Canvas : node::ICanvas {
-    static constexpr int16_t W = 128;
-    static constexpr int16_t H = 64;
+    static constexpr int16_t W = 512;
+    static constexpr int16_t H = 160;
     bool px[H][W] = {};
     int count = 0;
 
@@ -47,100 +46,94 @@ struct Canvas : node::ICanvas {
                 if (px[y][x] && x + 1 > w) w = x + 1;
         return w;
     }
+    int16_t max_row() const {
+        int16_t m = -1;
+        for (int16_t y = 0; y < H; ++y)
+            for (int16_t x = 0; x < W; ++x)
+                if (px[y][x] && y > m) m = y;
+        return m;
+    }
 };
+
+int16_t width_of(const char* s, uint8_t px) {
+    Canvas c;
+    return node::draw_utf8(c, g_font, 0, 0, s, px, Canvas::W);
+}
 
 }  // namespace
 
+// 폰트 로드는 그 자체가 테스트다 — 실패하면 나머지는 의미가 없어 여기서 멈춘다.
+void test_font_bins_load() {
+    size_t n32 = 0, n64 = 0;
+    g_bin32 = load("../assets/efb_common32.bin", n32);
+    g_bin64 = load("../assets/efb_common64.bin", n64);
+    TEST_ASSERT_NOT_NULL_MESSAGE(g_bin32, "efb_common32.bin 열기 실패 — node/ 에서 실행했는가?");
+    TEST_ASSERT_NOT_NULL_MESSAGE(g_bin64, "efb_common64.bin 열기 실패");
+    TEST_ASSERT_TRUE(g_font.add(g_bin32, n32));
+    TEST_ASSERT_TRUE(g_font.add(g_bin64, n64));
+}
+
+// 깨진 헤더(길이 부족·자기모순)는 add 가 거부한다 — 글립 밖을 읽으면 안 된다.
+void test_corrupt_bin_is_rejected() {
+    node::BakedFont f;
+    const uint8_t junk[8] = {32, 0, 128, 0, 95, 0, 0x2E, 9};  // 표·글립이 없는 길이
+    TEST_ASSERT_FALSE(f.add(junk, sizeof(junk)));
+    const uint8_t bad_cell[8] = {33, 0, 128, 0, 95, 0, 0, 0};  // cell 이 8의 배수가 아님
+    TEST_ASSERT_FALSE(f.add(bad_cell, sizeof(bad_cell)));
+}
+
 // 한글은 UTF-8 3바이트다 — 바이트 단위로 잘리면 안 된다 (이슈 #12의 원인).
-void test_hangul_is_decoded_as_one_glyph() {
-    FakeFont font;
+// 고정폭: 한글 = 전각(advance = px).
+void test_hangul_is_fullwidth_native() {
     Canvas c;
-    const int16_t w = node::draw_utf8(c, font, 0, 0, "\xED\x95\x9C", 1, c.W);  // "한"
+    const int16_t w = node::draw_utf8(c, g_font, 0, 0, "\xED\x95\x9C", 64, c.W);  // "한"
 
-    TEST_ASSERT_EQUAL_INT16(16, w);  // 3바이트가 글립 하나 = advance 16px
-    TEST_ASSERT_EQUAL_INT(16 * 16, c.count);
+    TEST_ASSERT_EQUAL_INT16(64, w);
+    TEST_ASSERT_GREATER_THAN_INT(0, c.count);
+    TEST_ASSERT_LESS_THAN_INT16(64, c.max_row());  // px 셀 안에 들어온다
 }
 
-void test_ascii_advances_half_width() {
-    FakeFont font;
-    Canvas c;
-    const int16_t w = node::draw_utf8(c, font, 0, 0, "AB", 1, c.W);
-
-    TEST_ASSERT_EQUAL_INT16(16, w);  // 8px x 2
-    TEST_ASSERT_TRUE(c.px[0][0]);
-    TEST_ASSERT_TRUE(c.px[0][8]);    // 두 번째 글자는 8px 옆
-    TEST_ASSERT_FALSE(c.px[0][16]);
+// ASCII = 반각(advance = px/2) — 서버 field_avail_w·웹 clip() 폭 모델과 동기.
+void test_ascii_is_halfwidth() {
+    TEST_ASSERT_EQUAL_INT16(32, width_of("A", 64));
+    TEST_ASSERT_EQUAL_INT16(64, width_of("AB", 64));
+    TEST_ASSERT_EQUAL_INT16(96, width_of("A\xED\x95\x9C", 64));  // 32 + 64
 }
 
-void test_mixed_ascii_and_hangul() {
-    FakeFont font;
-    Canvas c;
-    // "A한B" — 8 + 16 + 8
-    const int16_t w = node::draw_utf8(c, font, 0, 0, "A\xED\x95\x9C" "B", 1, c.W);
-    TEST_ASSERT_EQUAL_INT16(32, w);
-    TEST_ASSERT_EQUAL_INT16(32, c.filled_width());
+// 요청 px 셋이 없으면 px 이하 최대 셋으로 낮춰 native 로 그린다 — 화면이 비지 않게.
+void test_missing_size_falls_back_to_smaller_native() {
+    TEST_ASSERT_EQUAL_INT16(32, width_of("\xED\x95\x9C", 48));  // 48 미등록 → 32 셋
+    TEST_ASSERT_EQUAL_INT16(64, width_of("\xED\x95\x9C", 128));  // 128 → 64 셋
 }
 
-// 32px 필드는 16x16 글립을 2배 정수 스케일로 그린다 — 폰트 데이터 하나로 두 크기를 덮는다.
-void test_scale_two_doubles_everything() {
-    FakeFont font;
-    Canvas c;
-    const int16_t w = node::draw_utf8(c, font, 0, 0, "\xED\x95\x9C", 2, c.W);  // "한"
-
-    TEST_ASSERT_EQUAL_INT16(32, w);
-    TEST_ASSERT_EQUAL_INT(32 * 32, c.count);
-    TEST_ASSERT_TRUE(c.px[31][31]);
-    TEST_ASSERT_FALSE(c.px[32][32]);
-}
-
-void test_origin_offset_is_honored() {
-    FakeFont font;
-    Canvas c;
-    node::draw_utf8(c, font, 8, 4, "A", 1, c.W);
-
-    TEST_ASSERT_FALSE(c.px[3][8]);
-    TEST_ASSERT_TRUE(c.px[4][8]);
-    TEST_ASSERT_TRUE(c.px[19][8]);   // 16행
-    TEST_ASSERT_FALSE(c.px[20][8]);
-}
-
-// 필드 폭을 넘는 텍스트는 잘라낸다 — 296x128 캔버스를 밟으면 안 된다.
+// 필드 폭을 넘는 텍스트는 잘라낸다 — 캔버스를 밟으면 안 된다.
 void test_text_wider_than_field_is_clipped() {
-    FakeFont font;
     Canvas c;
-    const int16_t w = node::draw_utf8(c, font, 0, 0, "AAAAAAAA", 1, /*max_w=*/20);
+    node::draw_utf8(c, g_font, 0, 0, "가가가가가가가가", 64, /*max_w=*/200);
 
-    TEST_ASSERT_EQUAL_INT16(16, w);  // 8px 글자 2개까지만 (3번째는 24px 초과)
-    TEST_ASSERT_EQUAL_INT16(16, c.filled_width());
+    TEST_ASSERT_LESS_OR_EQUAL_INT16(192, c.filled_width());  // 64×3 까지만
 }
 
-void test_missing_glyph_is_skipped_not_drawn_as_garbage() {
-    FakeFont font;
-    Canvas c;
-    const int16_t w = node::draw_utf8(c, font, 0, 0, "A?A", 1, c.W);
-
-    TEST_ASSERT_EQUAL_INT16(16, w);  // '?' 는 폰트에 없다 → 자리도 차지하지 않는다
-    TEST_ASSERT_EQUAL_INT(2 * 8 * 16, c.count);
+// 서브셋 밖 글자('뷁' — KS X 1001 상용 밖)는 자리도 주지 않는다. 1차 방어는 서버 입력검증.
+void test_glyph_outside_subset_is_skipped() {
+    TEST_ASSERT_EQUAL_INT16(width_of("AA", 64), width_of("A\xEB\xB7\x81" "A", 64));  // "A뷁A"
 }
 
 // 잘린 UTF-8(무선에서 페이로드가 깨진 경우)에 버퍼를 밟으면 안 된다.
 void test_truncated_utf8_does_not_overrun() {
-    FakeFont font;
-    Canvas c;
-    const int16_t w = node::draw_utf8(c, font, 0, 0, "A\xED\x95", 1, c.W);  // 3바이트 중 2개만
-
-    TEST_ASSERT_EQUAL_INT16(8, w);  // 'A' 만 그려지고 잘린 시퀀스는 버린다
+    TEST_ASSERT_EQUAL_INT16(width_of("A", 64), width_of("A\xED\x95", 64));  // 3바이트 중 2개만
 }
 
 int main() {
     UNITY_BEGIN();
-    RUN_TEST(test_hangul_is_decoded_as_one_glyph);
-    RUN_TEST(test_ascii_advances_half_width);
-    RUN_TEST(test_mixed_ascii_and_hangul);
-    RUN_TEST(test_scale_two_doubles_everything);
-    RUN_TEST(test_origin_offset_is_honored);
+    RUN_TEST(test_font_bins_load);
+    RUN_TEST(test_corrupt_bin_is_rejected);
+    if (!g_bin32 || !g_bin64) return UNITY_END();
+    RUN_TEST(test_hangul_is_fullwidth_native);
+    RUN_TEST(test_ascii_is_halfwidth);
+    RUN_TEST(test_missing_size_falls_back_to_smaller_native);
     RUN_TEST(test_text_wider_than_field_is_clipped);
-    RUN_TEST(test_missing_glyph_is_skipped_not_drawn_as_garbage);
+    RUN_TEST(test_glyph_outside_subset_is_skipped);
     RUN_TEST(test_truncated_utf8_does_not_overrun);
     return UNITY_END();
 }

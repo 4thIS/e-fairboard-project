@@ -28,9 +28,14 @@
 #include <node/templates.h>
 #include <node/text.h>
 
-// 16px 한글 비트맵 (gen_font_data.py 생성 — main.cpp와 공유).
-extern const uint8_t EFB_HANGUL16[] PROGMEM;
-extern const size_t EFB_HANGUL16_LEN;
+// 32/48/64px 베이크 폰트 (gen_font_data.py 생성 — main.cpp와 공유). 크기별 native
+// 래스터라 확대 계단이 없다 — 폰트 렌더 V2 §A.
+extern const uint8_t EFB_COMMON32[];
+extern const size_t EFB_COMMON32_LEN;
+extern const uint8_t EFB_COMMON48[];
+extern const size_t EFB_COMMON48_LEN;
+extern const uint8_t EFB_COMMON64[];
+extern const size_t EFB_COMMON64_LEN;
 
 #ifndef EFB_NODE_ID
 #define EFB_NODE_ID 0x01
@@ -82,35 +87,22 @@ public:
     uint16_t read_mv() override { return 0; }  // 임시 노드 — 배터리 미장착
 };
 
-class ProgmemFont : public node::IGlyphSource {
-public:
-    bool glyph(uint32_t cp, uint8_t out[node::GLYPH_BYTES], uint8_t& advance_px) override {
-        size_t index;
-        if (cp >= 0x20 && cp <= 0x7E) {
-            index = cp - 0x20;
-            advance_px = 8;
-        } else if (cp >= 0xAC00 && cp <= 0xD7A3) {
-            index = 95 + (cp - 0xAC00);
-            advance_px = 16;
-        } else {
-            return false;
-        }
-        const size_t off = index * node::GLYPH_BYTES;
-        if (off + node::GLYPH_BYTES > EFB_HANGUL16_LEN) return false;
-        for (size_t i = 0; i < node::GLYPH_BYTES; ++i) {
-            out[i] = pgm_read_byte(EFB_HANGUL16 + off + i);
-        }
-        return true;
-    }
-};
+// 크기별 bin 3개를 든 베이크 폰트 — setup 에서 add() 로 등록.
+node::BakedFont g_font;
 
 // 사분면 4패스 렌더러. pixel()은 논리좌표(템플릿)를 받아 현재 사분면에 들어오는 점만
-// 버퍼에 찍는다 (실물 확인 결과 패널 원좌표가 설치 방향과 일치 — 회전 불필요, 2026-08-19).
+// 버퍼에 찍는다. 가로 템플릿은 패널 원좌표 그대로(실물 확인 2026-08-19), 세로 템플릿
+// (984x1304, 팀 소개)은 90° 회전해 물리 1304x984 로 눕힌다 — 안 하면 왼쪽 984폭에만
+// 가로로 그려지는 버그 (실물 사진 2026-08-20, HANDOFF_FONT_RENDER_V2 §B).
 class EpdDisplay : public node::IDisplay, public node::ICanvas {
 public:
     void pixel(int16_t x, int16_t y) override {
-        const int16_t px = x;
-        const int16_t py = y;
+        int16_t px = x;
+        int16_t py = y;
+        if (logical_h_ > logical_w_) {  // 세로 → CCW 회전 (방향은 패널 세우는 쪽 실물 확인)
+            px = y;
+            py = static_cast<int16_t>(logical_w_ - 1 - x);
+        }
         const QuadDef& q = QUADS[quad_];
         const int16_t qx = px - q.x0;
         const int16_t qy = py - q.y0;
@@ -122,13 +114,14 @@ public:
         const node::TemplateDef* tpl = node::find_template(s.template_id);
         if (!tpl) return;
         (void)refresh_mode;  // 대형 패널은 전체 갱신만 (HANDOFF §3)
+        logical_w_ = tpl->canvas_w;
+        logical_h_ = tpl->canvas_h;
         draw_pass([&] {
             for (uint8_t i = 0; i < tpl->field_count; ++i) {
                 const node::FieldDef& f = tpl->fields[i];
                 if (f.id >= node::MAX_FIELDS || !s.has_field[f.id]) continue;
-                const uint8_t scale = node::scale_for(f.font_size);
-                const int16_t avail = node::field_avail_w(f, tpl->qr, scale);
-                node::draw_utf8(*this, font_, f.x, f.y, s.fields[f.id], scale, avail);
+                const int16_t avail = node::field_avail_w(f, tpl->qr, tpl->canvas_w);
+                node::draw_utf8(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, avail);
             }
             if (s.has_qr) draw_qr(s.qr_url, tpl->qr);
         });
@@ -137,13 +130,15 @@ public:
     void boot_screen(uint8_t node_id) {
         char msg[64];
         snprintf(msg, sizeof(msg), "노드 0x%02X — 수신 대기 중 (12.48\")", node_id);
-        draw_pass([&] { node::draw_utf8(*this, font_, 24, 24, msg, 3, PANEL_W - 48); });
+        logical_w_ = PANEL_W;
+        logical_h_ = PANEL_H;
+        draw_pass([&] { node::draw_utf8(*this, g_font, 24, 24, msg, 64, PANEL_W - 48); });
     }
 
 private:
-    ProgmemFont font_;
     uint8_t* buf_ = nullptr;
     int quad_ = 0;
+    int16_t logical_w_ = PANEL_W, logical_h_ = PANEL_H;  // 현재 템플릿 캔버스 (회전 판정)
 
     // 사분면마다: 백지 → 콘텐츠 그리기 → 컨트롤러로 전송(검정 채널=버퍼, 빨강 채널=없음).
     // 마지막에 전체 갱신+슬립. 드라이버는 3색 (B) V2 — 흑백 드라이버는 회색 번짐(실측 폐기).
@@ -221,7 +216,7 @@ size_t readN(uint8_t* out, size_t n, uint32_t timeout_ms) {
     return got;
 }
 
-// HAT 설정 확인·교정 (main_hat.cpp와 동일 — 고정전송·서브패킷240).
+// HAT 설정 확인·교정 — 고정전송·서브패킷240·채널(공장값이 제각각 — 2호기 HAT은 0x12로 출하됨).
 void configureHat() {
     digitalWrite(LORA_M0, LOW);
     digitalWrite(LORA_M1_PIN, HIGH);
@@ -237,18 +232,20 @@ void configureHat() {
         for (int i = 3; i < 12; ++i) Serial.printf(" %02X", resp[i]);
         Serial.println();
         const uint8_t reg1 = resp[3 + REG1_ADDR];
+        const uint8_t ch = resp[3 + 0x05];
         const uint8_t reg3 = resp[3 + REG3_ADDR];
         const uint8_t want1 = reg1 & REG1_SUBPKT_MASK;
-        if (reg1 != want1 || reg3 != REG3_FIXED) {
+        if (reg1 != want1 || ch != ENV_CH || reg3 != REG3_FIXED) {
             const uint8_t writeCmd[6] = {0xC0, REG1_ADDR, 0x03,
-                                         want1, resp[3 + 0x05], REG3_FIXED};
+                                         want1, ENV_CH, REG3_FIXED};
             Serial2.write(writeCmd, sizeof(writeCmd));
             uint8_t wr[6];
             const size_t wn = readN(wr, sizeof(wr), 500);
-            Serial.printf("[HAT] REG1 %02X→%02X, REG3 %02X→%02X %s\n", reg1, want1, reg3,
-                          REG3_FIXED, (wn >= 1 && wr[0] == 0xC1) ? "완료" : "실패!");
+            Serial.printf("[HAT] REG1 %02X→%02X, CH %02X→%02X, REG3 %02X→%02X %s\n", reg1, want1,
+                          ch, ENV_CH, reg3, REG3_FIXED,
+                          (wn >= 1 && wr[0] == 0xC1) ? "완료" : "실패!");
         } else {
-            Serial.println("[HAT] 설정 확인 — 고정전송·서브패킷240 일치");
+            Serial.println("[HAT] 설정 확인 — 고정전송·서브패킷240·채널72 일치");
         }
     } else {
         Serial.printf("[HAT] 설정 읽기 실패(n=%u) — 배선/M0M1 확인. 그래도 진행\n", (unsigned)n);
@@ -271,6 +268,12 @@ void setup() {
     delay(50);
     Serial2.begin(LORA_BAUD, SERIAL_8N1, LORA_RX, LORA_TX);
     configureHat();
+
+    if (!g_font.add(EFB_COMMON32, EFB_COMMON32_LEN) ||
+        !g_font.add(EFB_COMMON48, EFB_COMMON48_LEN) ||
+        !g_font.add(EFB_COMMON64, EFB_COMMON64_LEN)) {
+        Serial.println("[font] 폰트 bin 헤더 불일치 — 텍스트는 그려지지 않는다");
+    }
 
     DEV_ModuleInit();  // 패널 GPIO·소프트SPI 준비 (LoRa 핀과 무관)
     display.boot_screen(EFB_NODE_ID);  // 전체갱신 ~35초 — 부팅은 느리지만 생존 확인용
