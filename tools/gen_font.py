@@ -6,6 +6,8 @@
 
 - 커버리지: ASCII 95자 + KS X 1001 상용한글 2,350자 (완성형 full 은 64px 기준 5.7MB 라
   4MB 플래시에 불가). 상용 밖 희귀 음절은 서버 입력검증(schemas.py, 우진)이 막는다.
+- 한글 목록은 assets/common_hangul.txt 를 읽는다 — 굽기·서버 검증의 단일 기준
+  (tools/gen_common_hangul.py 산출물). 여기서 다시 계산하면 기준이 둘이 된다.
 - 고정폭: 한글 = 전각(advance = 크기), ASCII = 반각(advance = 크기/2) — 서버
   field_avail_w·웹 clip() 폭 모델과 동기 (비례폭 금지).
 - 원본: 나눔고딕코딩(고정폭, SIL OFL 1.1 — assets/OFL.txt). 고정폭 폰트라 ASCII 가
@@ -30,18 +32,15 @@ SIZES = (32, 48, 64)
 ASCII_START, ASCII_END = 0x20, 0x7E  # 95자
 
 
-def ks1001_common() -> list[int]:
-    """KS X 1001 상용한글 2,350자 = cp949 의 완성형 구역(리드 0xB0-0xC8, 트레일 0xA1-0xFE)."""
-    out = []
-    for cp in range(0xAC00, 0xD7A4):
-        try:
-            b = chr(cp).encode("cp949")
-        except UnicodeEncodeError:
-            continue
-        if len(b) == 2 and 0xB0 <= b[0] <= 0xC8 and 0xA1 <= b[1] <= 0xFE:
-            out.append(cp)
-    assert len(out) == 2350, len(out)
-    return out
+def common_hangul() -> list[int]:
+    """assets/common_hangul.txt (tools/gen_common_hangul.py 산출물)의 상용한글 2,350자."""
+    src = ROOT / "assets" / "common_hangul.txt"
+    if not src.exists():
+        raise SystemExit(f"{src} 가 없습니다 — 먼저: python tools/gen_common_hangul.py")
+    cps = sorted(ord(c) for c in src.read_text(encoding="utf-8").strip())
+    if len(cps) != 2350:
+        raise SystemExit(f"상용 한글 {len(cps)}자 (기대 2,350) — 목록 재생성 필요")
+    return cps
 
 
 def pick_font(ttf: Path, cell: int) -> tuple[ImageFont.FreeTypeFont, int]:
@@ -72,7 +71,7 @@ def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
     ttf = Path(sys.argv[1])
-    cps = ks1001_common()
+    cps = common_hangul()
 
     for cell in SIZES:
         font, y_off = pick_font(ttf, cell)
