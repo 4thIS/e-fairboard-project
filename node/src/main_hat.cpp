@@ -24,13 +24,13 @@
 #include <node/templates.h>
 #include <node/text.h>
 
-// 32/48/64px 베이크 폰트 (gen_font_data.py 생성 — main.cpp와 공유). 폰트 렌더 V2 §A.
-extern const uint8_t EFB_COMMON32[];
-extern const size_t EFB_COMMON32_LEN;
-extern const uint8_t EFB_COMMON48[];
-extern const size_t EFB_COMMON48_LEN;
-extern const uint8_t EFB_COMMON64[];
-extern const size_t EFB_COMMON64_LEN;
+// 40/56/72px 베이크 폰트 Bold (gen_font_data.py 생성 — main.cpp와 공유). 폰트 렌더 V2.
+extern const uint8_t EFB_COMMON40[];
+extern const size_t EFB_COMMON40_LEN;
+extern const uint8_t EFB_COMMON56[];
+extern const size_t EFB_COMMON56_LEN;
+extern const uint8_t EFB_COMMON72[];
+extern const size_t EFB_COMMON72_LEN;
 
 #ifndef EFB_NODE_ID
 #define EFB_NODE_ID 0x01
@@ -126,7 +126,7 @@ public:
         epd.firstPage();
         do {
             epd.fillScreen(GxEPD_WHITE);
-            node::draw_utf8(*this, g_font, 24, 24, msg, 48, 800 - 24);
+            node::draw_utf8(*this, g_font, 24, 24, msg, 56, 800 - 24);
         } while (epd.nextPage());
     }
 
@@ -224,9 +224,9 @@ void setup() {
     Serial2.begin(LORA_BAUD, SERIAL_8N1, LORA_RX, LORA_TX);
     configureHat();
 
-    if (!g_font.add(EFB_COMMON32, EFB_COMMON32_LEN) ||
-        !g_font.add(EFB_COMMON48, EFB_COMMON48_LEN) ||
-        !g_font.add(EFB_COMMON64, EFB_COMMON64_LEN)) {
+    if (!g_font.add(EFB_COMMON40, EFB_COMMON40_LEN) ||
+        !g_font.add(EFB_COMMON56, EFB_COMMON56_LEN) ||
+        !g_font.add(EFB_COMMON72, EFB_COMMON72_LEN)) {
         Serial.println("[font] 폰트 bin 헤더 불일치 — 텍스트는 그려지지 않는다");
     }
 

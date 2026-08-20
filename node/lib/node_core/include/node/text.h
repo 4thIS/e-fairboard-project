@@ -5,9 +5,12 @@
 
 namespace node {
 
-// 크기별(32/48/64px) native 베이크 폰트 — 확대 없음 (폰트 렌더 V2 §A).
-// 가장 큰 셀 64px = 512B. 고정폭: 한글 = 전각(advance=셀), ASCII = 반각(advance=셀/2).
-constexpr size_t MAX_GLYPH_BYTES = 512;
+// 크기별(40/56/72px) native 베이크 폰트 — 확대 없음 (폰트 렌더 V2 §A).
+// 고정폭: 한글 = 전각(advance=셀), ASCII = 반각(advance=셀/2).
+//
+// 가장 큰 셀의 글립 크기(72px → 72²/8 = 648B). 크기를 키울 때 이 값을 같이 올리지 않으면
+// BakedFont::add() 가 bin 을 거부해 화면에 글자가 하나도 안 나온다 (2026-08-20 실측).
+constexpr size_t MAX_GLYPH_BYTES = 648;
 constexpr uint8_t FONT_SET_MAX = 3;
 
 // 폰트 데이터를 어디에 두든(플래시 rodata / 호스트 파일) 렌더러는 모른다.
