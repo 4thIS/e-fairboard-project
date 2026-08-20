@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
 import QRCode from 'qrcode'
-import { clip, advanceOf, scaleFor, GLYPH_CELL } from '../epaper/text'
+import { clip, scaleFor } from '../epaper/text'
 import { DEFAULT_CANVAS, type TemplateDef } from '../epaper/types'
 
 const props = withDefaults(defineProps<{
@@ -20,14 +20,15 @@ const canvas = computed(() => props.template?.canvas ?? DEFAULT_CANVAS)
 const previewScale = computed(() =>
   Math.max(0.01, Math.min(props.boxW / canvas.value.w, props.boxH / canvas.value.h)))
 
-/** 필드별로 노드와 같은 규칙으로 잘라낸다. */
+/** 필드별로 노드와 같은 규칙으로 잘라낸다.
+ *  clip() 은 현재 노드(고정폭) 기준으로 폭을 맞춘다 — 노드가 stb 비례폭으로 플립하고
+ *  폰트 메트릭(woff2)을 번들하면 정확 일치로 후속. 지금은 근사(한글은 전각이라 정확). */
 const rows = computed(() => {
   if (!props.template) return []
   return props.template.fields.map((f) => {
     const raw = props.fields[String(f.id)] ?? ''
-    const s = scaleFor(f.font_size)     // 16 → 1, 32 → 2 (노드 scale_for 과 동일)
-    const { text } = clip(raw, f.avail_w, s)
-    return { f, s, chars: [...text] }   // clip() 이 이미 렌더 불가 글자를 거른다
+    const { text } = clip(raw, f.avail_w, scaleFor(f.font_size))
+    return { f, text }   // clip() 이 이미 렌더 불가 글자를 거른다
   })
 })
 
@@ -76,7 +77,7 @@ watchEffect(async () => {
     :style="{ width: canvas.w * previewScale + 'px', height: canvas.h * previewScale + 'px' }"
     role="img"
     :aria-label="template
-      ? `${template.name}: ` + rows.map(r => `${r.f.name} ${r.chars.join('')}`).join(', ')
+      ? `${template.name}: ` + rows.map(r => `${r.f.name} ${r.text}`).join(', ')
       : '표시 내용 없음'"
   >
     <div
@@ -84,20 +85,14 @@ watchEffect(async () => {
       :style="{ width: canvas.w + 'px', height: canvas.h + 'px',
                 transform: `scale(${previewScale})` }"
     >
+      <!-- V2: 노드가 stb_truetype 로 native 크기에 비례폭 렌더 → 미리보기도 비례폭 자연 흐름.
+           font_size 는 실제 px 높이. 폭은 폰트 메트릭에 맡긴다(정확 일치는 woff2 번들 후속). -->
       <div
         v-for="r in rows" :key="r.f.id"
         class="row pix"
         :style="{ left: r.f.x + 'px', top: r.f.y + 'px',
-                  fontSize: GLYPH_CELL * r.s + 'px', lineHeight: GLYPH_CELL * r.s + 'px' }"
-      >
-        <!-- 글자마다 폭을 명시한다 — 브라우저 폰트 메트릭에 기대지 않는다.
-             우리가 잰 폭이 곧 레이아웃이라 text.spec.ts 가 화면을 보장한다. -->
-        <span
-          v-for="(ch, i) in r.chars" :key="i"
-          class="g"
-          :style="{ width: advanceOf(ch) * r.s + 'px' }"
-        >{{ ch }}</span>
-      </div>
+                  fontSize: r.f.font_size + 'px', lineHeight: r.f.font_size + 'px' }"
+      >{{ r.text }}</div>
 
       <canvas
         v-if="template && qrUrl"
@@ -116,6 +111,5 @@ watchEffect(async () => {
 }
 .inner { position: relative; transform-origin: top left; }
 .row { position: absolute; white-space: nowrap; color: var(--ink); }
-.g { display: inline-block; overflow: hidden; }
 .qr { position: absolute; image-rendering: pixelated; }
 </style>

@@ -41,6 +41,25 @@ async def test_fixed_mode_prepends_envelope():
         await t.close()
 
 
+async def test_release_pauses_then_reacquire_restores():
+    # 무선설정이 포트를 빌려 쓸 수 있게: release 중엔 read/write 무응답, reacquire 로 복구.
+    t = SerialTransport("loop://", 9600)
+    try:
+        t.release()
+        assert await t.read() == b""          # 릴리즈 중엔 무응답
+        await t.write(b"\xAA")                 # 릴리즈 중 쓰기는 조용히 버림(예외 X)
+        t.reacquire()
+        await t.write(b"\x01\x02")
+        raw = bytearray()
+        for _ in range(50):
+            raw += await t.read()
+            if raw:
+                break
+        assert bytes(raw) == b"\x01\x02"       # 되잡으면 다시 동작
+    finally:
+        await t.close()
+
+
 async def test_idle_read_returns_empty_not_blocks():
     t = SerialTransport("loop://", 9600)
     try:
