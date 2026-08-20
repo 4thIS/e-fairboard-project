@@ -10,15 +10,16 @@ GOLDEN = bytes.fromhex("000000" "62E0" "12" "43" "0000")  # 실측 공장기본 
 # ---- e22.py 순수 로직 (하드웨어 무관) ----
 
 def test_channel_mhz_roundtrip():
-    assert e22.channel_to_mhz(18) == 868
-    assert e22.channel_to_mhz(72) == 922
-    assert e22.mhz_to_channel(922) == 72
-    assert e22.mhz_to_channel(868) == 18
+    assert e22.channel_to_mhz(18) == 868.125
+    assert e22.channel_to_mhz(72) == 922.125
+    assert e22.mhz_to_channel(922.125) == 72
+    assert e22.mhz_to_channel(922) == 72       # 정수 입력도 가장 가까운 채널로
+    assert e22.mhz_to_channel(868.125) == 18
 
 
 def test_decode_golden_vector():
     d = e22.decode_registers(GOLDEN)
-    assert d["channel"] == 18 and d["freq_mhz"] == 868
+    assert d["channel"] == 18 and d["freq_mhz"] == 868.125
     assert d["uart_bps"] == 9600 and d["air_bps"] == 2400
     assert d["power_dbm"] == 22
     assert d["address"] == 0 and d["netid"] == 0
@@ -39,8 +40,8 @@ def test_build_write_cmd_rejects_bad_length():
 
 
 def test_kr920_band():
-    assert not e22.in_kr920(868)
-    assert e22.in_kr920(922)
+    assert not e22.in_kr920(868.125)
+    assert e22.in_kr920(922.125)
 
 
 # ---- fake-serial 라우터 분기 ----
@@ -79,7 +80,7 @@ class FakeSerial:
 def test_read_config_mode(monkeypatch):
     monkeypatch.setattr(radio, "_open", lambda port: FakeSerial())
     out = radio.read_registers(radio.PortReq(port="COMX"))
-    assert out["ok"] and out["registers"]["freq_mhz"] == 868
+    assert out["ok"] and out["registers"]["freq_mhz"] == 868.125
 
 
 def test_read_not_config_mode_returns_hint(monkeypatch):
@@ -92,11 +93,11 @@ def test_frequency_writes_and_verifies(monkeypatch):
     fake = FakeSerial()
     monkeypatch.setattr(radio, "_open", lambda port: fake)
     monkeypatch.setattr(radio.time, "sleep", lambda s: None)
-    out = radio.set_frequency(radio.FreqReq(port="COMX", mhz=922))
+    out = radio.set_frequency(radio.FreqReq(port="COMX", mhz=922.125))
     assert out["ok"] is True
-    assert out["before"]["freq_mhz"] == 868
-    assert out["after"]["freq_mhz"] == 922
-    assert out["warn"] is None  # 922 는 KR920 안
+    assert out["before"]["freq_mhz"] == 868.125
+    assert out["after"]["freq_mhz"] == 922.125
+    assert out["warn"] is None  # 922.125 는 KR920 안
 
 
 def test_frequency_out_of_range_422(monkeypatch):

@@ -5,6 +5,7 @@ VirtualTransport 와 같은 바이트 파이프 계약(Transport)만 만족하�
 감싸 이벤트 루프를 막지 않는다.
 """
 import asyncio
+import time
 
 import serial
 
@@ -16,6 +17,8 @@ from .base import Transport
 class SerialTransport(Transport):
     def __init__(self, port: str, baud: int = 9600,
                  fixed_channel: int | None = None) -> None:
+        self._port = port
+        self._baud = baud
         # serial_for_url: 실물 'COM5' 도, 테스트 'loop://' 루프백도 같은 코드로 연다.
         # timeout=0.1 → read 가 최대 0.1초만 블록 → stop() 시 리더 태스크가 곧 풀린다.
         self._ser = serial.serial_for_url(port, baudrate=baud, timeout=0.1)
@@ -29,8 +32,14 @@ class SerialTransport(Transport):
         await asyncio.to_thread(self._write, self._envelope + bytes(data))
 
     def _write(self, data: bytes) -> None:
-        self._ser.write(data)
-        self._ser.flush()
+        ser = self._ser
+        if ser is None:  # release() 로 포트를 잠깐 놓은 상태 (무선설정 중) — 조용히 버린다
+            return
+        try:
+            ser.write(data)
+            ser.flush()
+        except serial.SerialException:
+            pass
 
     async def read(self) -> bytes:
         return await asyncio.to_thread(self._read)
@@ -38,13 +47,37 @@ class SerialTransport(Transport):
     def _read(self) -> bytes:
         # 1바이트 기다렸다가 버퍼에 쌓인 만큼 한 번에 반환. 유휴 시 b'' (10Hz 폴).
         # ponytail: 폴링 방식. 처리량/지연이 문제되면 전용 리더 스레드로 올린다.
-        first = self._ser.read(1)
-        if not first:
+        ser = self._ser
+        if ser is None:
+            time.sleep(0.1)  # release 중 — busy-spin 방지
             return b""
-        return first + self._ser.read(self._ser.in_waiting)
+        try:
+            first = ser.read(1)
+            if not first:
+                return b""
+            return first + ser.read(ser.in_waiting)
+        except serial.SerialException:
+            return b""  # release() 가 포트를 닫는 순간 진행 중이던 read
+
+    def release(self) -> None:
+        """포트를 잠깐 놓아준다 — 무선설정 도구가 같은 COM 을 설정모드로 열 수 있게.
+        진행 중인 read/write 는 위 예외 처리로 조용히 풀린다. 설정 중엔 HAT 이 설정모드라
+        어차피 전송이 안 되므로 링크를 멈춰도 안전하다."""
+        ser, self._ser = self._ser, None
+        if ser is not None:
+            try:
+                ser.close()
+            except serial.SerialException:
+                pass
+
+    def reacquire(self) -> None:
+        if self._ser is None:
+            self._ser = serial.serial_for_url(self._port, baudrate=self._baud, timeout=0.1)
 
     async def close(self) -> None:
-        self._ser.close()
+        if self._ser is not None:
+            self._ser.close()
+            self._ser = None
 
 
 class SerialRig:
