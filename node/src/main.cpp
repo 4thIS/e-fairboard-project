@@ -88,7 +88,10 @@ node::BakedFont g_font;
 // 하드웨어 도착 후 실측할 것 — 넘으면 COMMIT 전용 T_ack 을 우진과 협의해야 한다.
 class EpdDisplay : public node::IDisplay, public node::ICanvas {
 public:
-    void pixel(int16_t x, int16_t y) override { epd.drawPixel(x, y, GxEPD_BLACK); }
+    // 2.9"는 흑백이라 빨강을 못 낸다 — 검정으로 떨어뜨린다(안 보이는 것보다 낫다).
+    void pixel(int16_t x, int16_t y, node::Ink ink) override {
+        epd.drawPixel(x, y, ink == node::Ink::Paper ? GxEPD_WHITE : GxEPD_BLACK);
+    }
 
     void render(const node::DisplayState& s, uint8_t refresh_mode) override {
         const node::TemplateDef* tpl = node::find_template(s.template_id);

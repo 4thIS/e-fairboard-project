@@ -99,7 +99,9 @@ node::BakedFont g_font;
 // 가로로 그려지는 버그 (실물 사진 2026-08-20, HANDOFF_FONT_RENDER_V2 §B).
 class EpdDisplay : public node::IDisplay, public node::ICanvas {
 public:
-    void pixel(int16_t x, int16_t y) override {
+    // 두 플레인 다 1=안 칠함. Black/Red 는 해당 플레인만 0 으로, Paper 는 둘 다 1 로
+    // 되돌려 종이를 드러낸다 — 빨강 밴드 위에 흰 글자를 얹는 방식(HANDOFF_NODE_LAYOUT_RED).
+    void pixel(int16_t x, int16_t y, node::Ink ink) override {
         int16_t px = x;
         int16_t py = y;
         if (logical_h_ > logical_w_) {  // 세로 → CCW 회전 (방향은 패널 세우는 쪽 실물 확인)
@@ -110,7 +112,41 @@ public:
         const int16_t qx = px - q.x0;
         const int16_t qy = py - q.y0;
         if (qx < 0 || qy < 0 || qx >= (int16_t)q.bytes_w * 8 || qy >= 492) return;
-        buf_[qy * q.bytes_w + (qx >> 3)] &= ~(0x80 >> (qx & 7));  // 0 = 검정
+
+        const size_t off = (size_t)qy * q.bytes_w + (qx >> 3);
+        const uint8_t bit = 0x80 >> (qx & 7);
+        switch (ink) {
+            case node::Ink::Black:
+                buf_k_[off] &= ~bit;
+                buf_r_[off] |= bit;  // 같은 점에 빨강이 남아 있으면 색이 섞인다
+                break;
+            case node::Ink::Red:
+                buf_r_[off] &= ~bit;
+                buf_k_[off] |= bit;
+                break;
+            case node::Ink::Paper:
+                buf_k_[off] |= bit;
+                buf_r_[off] |= bit;
+                break;
+        }
+    }
+
+    void fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, node::Ink ink) {
+        for (int16_t dy = 0; dy < h; ++dy)
+            for (int16_t dx = 0; dx < w; ++dx) pixel(x + dx, y + dy, ink);
+    }
+
+    // 테두리 = 얇은 채움 사각형 4개 (위·아래·좌·우). 모서리는 겹쳐도 무해하다.
+    void stroke_rect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t sw, node::Ink ink) {
+        if (sw <= 0 || w <= 0 || h <= 0) return;
+        if (sw * 2 >= w || sw * 2 >= h) {  // 테두리가 서로 만나면 그냥 꽉 채운다
+            fill_rect(x, y, w, h, ink);
+            return;
+        }
+        fill_rect(x, y, w, sw, ink);
+        fill_rect(x, y + h - sw, w, sw, ink);
+        fill_rect(x, y + sw, sw, h - 2 * sw, ink);
+        fill_rect(x + w - sw, y + sw, sw, h - 2 * sw, ink);
     }
 
     void render(const node::DisplayState& s, uint8_t refresh_mode) override {
@@ -130,20 +166,26 @@ public:
         });
     }
 
+    // 부팅 확인용. 빨강 밴드 위에 종이색 글자를 얹어 두 플레인이 다 살아있는지 눈으로 본다
+    // — 배포 전에 빨강 채널 배선·반전 전송이 맞는지 확인할 유일한 화면이다.
     void boot_screen(uint8_t node_id) {
         char msg[64];
         snprintf(msg, sizeof(msg), "노드 0x%02X — 수신 대기 중 (12.48\")", node_id);
         logical_w_ = PANEL_W;
         logical_h_ = PANEL_H;
-        draw_pass([&] { node::draw_utf8(*this, g_font, 24, 24, msg, 72, PANEL_W - 48); });
+        draw_pass([&] {
+            fill_rect(0, 0, PANEL_W, 120, node::Ink::Red);
+            node::draw_utf8(*this, g_font, 24, 24, msg, 72, PANEL_W - 48, node::Ink::Paper);
+        });
     }
 
 private:
-    uint8_t* buf_ = nullptr;
+    uint8_t* buf_k_ = nullptr;  // 검정 플레인 (0x10)
+    uint8_t* buf_r_ = nullptr;  // 빨강 플레인 (0x13)
     int quad_ = 0;
     int16_t logical_w_ = PANEL_W, logical_h_ = PANEL_H;  // 현재 템플릿 캔버스 (회전 판정)
 
-    // 사분면마다: 백지 → 콘텐츠 그리기 → 컨트롤러로 전송(검정 채널=버퍼, 빨강 채널=없음).
+    // 사분면마다: 두 플레인 백지 → 콘텐츠 그리기 → 컨트롤러로 전송(0x10 검정, 0x13 빨강).
     // 마지막에 전체 갱신+슬립. 드라이버는 3색 (B) V2 — 흑백 드라이버는 회색 번짐(실측 폐기).
     template <typename DrawFn>
     void draw_pass(DrawFn draw) {
@@ -155,22 +197,25 @@ private:
                                           EPD_12in48B_cmd2M2, EPD_12in48B_cmd2S2};
         static void (*const DAT2[4])(UBYTE) = {EPD_12in48B_data2M1, EPD_12in48B_data2S1,
                                                EPD_12in48B_data2M2, EPD_12in48B_data2S2};
-        if (!buf_) buf_ = (uint8_t*)malloc(QUAD_BUF_MAX);
-        if (!buf_) {
-            Serial.println("[epd] 버퍼 할당 실패!");
+        if (!buf_k_) buf_k_ = (uint8_t*)malloc(QUAD_BUF_MAX);
+        if (!buf_r_) buf_r_ = (uint8_t*)malloc(QUAD_BUF_MAX);
+        if (!buf_k_ || !buf_r_) {
+            Serial.printf("[epd] 버퍼 할당 실패! (사분면당 %uB x2, 여유 %u)\n",
+                          (unsigned)QUAD_BUF_MAX, (unsigned)ESP.getFreeHeap());
             return;
         }
         EPD_12in48B_Init();  // 슬립에서 깨우기 (리셋+레지스터)
         const uint32_t t0 = millis();
         for (quad_ = 0; quad_ < 4; ++quad_) {
-            memset(buf_, 0xff, QUAD_BUF_MAX);
+            memset(buf_k_, 0xff, QUAD_BUF_MAX);
+            memset(buf_r_, 0xff, QUAD_BUF_MAX);
             draw();
             const size_t n = (size_t)QUADS[quad_].bytes_w * 492;
             CMD1[quad_]();  // 0x10 검정 채널: 1=흰 0=검
-            for (size_t i = 0; i < n; ++i) DAT1[quad_](buf_[i]);
-            CMD2[quad_]();  // 0x13 빨강 채널 — data2 함수가 반전 전송(~data)하므로
-            for (size_t i = 0; i < n; ++i) DAT2[quad_](0xff);  // 0xff = 빨강 없음
-
+            for (size_t i = 0; i < n; ++i) DAT1[quad_](buf_k_[i]);
+            // 0x13 빨강 채널 — data2 함수가 반전 전송(~data)하므로 1=빨강 없음 그대로 넘긴다
+            CMD2[quad_]();
+            for (size_t i = 0; i < n; ++i) DAT2[quad_](buf_r_[i]);
         }
         Serial.println("[epd] 데이터 전송 완료 — 갱신 시작 (~35초)");
         EPD_12in48B_TurnOnDisplay();
@@ -197,7 +242,7 @@ private:
                 if (!qrcode_getModule(&qr, x, y)) continue;
                 for (int16_t dy = 0; dy < scale; ++dy)
                     for (int16_t dx = 0; dx < scale; ++dx)
-                        pixel(ox + x * scale + dx, oy + y * scale + dy);
+                        pixel(ox + x * scale + dx, oy + y * scale + dy, node::Ink::Black);
             }
         }
     }

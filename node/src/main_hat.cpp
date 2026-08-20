@@ -99,7 +99,13 @@ node::BakedFont g_font;
 // 성공한다. 중복 갱신은 멱등 키를 렌더 전에 찍어 막는다.
 class EpdDisplay : public node::IDisplay, public node::ICanvas {
 public:
-    void pixel(int16_t x, int16_t y) override { epd.drawPixel(x, y, GxEPD_BLACK); }
+    // 7.5"(B)도 3색이라 빨강을 그대로 낼 수 있다. Paper 는 흰색으로 덮어 밴드를 뚫는다.
+    void pixel(int16_t x, int16_t y, node::Ink ink) override {
+        const uint16_t c = ink == node::Ink::Red     ? GxEPD_RED
+                           : ink == node::Ink::Paper ? GxEPD_WHITE
+                                                     : GxEPD_BLACK;
+        epd.drawPixel(x, y, c);
+    }
 
     void render(const node::DisplayState& s, uint8_t refresh_mode) override {
         const node::TemplateDef* tpl = node::find_template(s.template_id);

@@ -32,12 +32,20 @@ struct Canvas : node::ICanvas {
     static constexpr int16_t W = 512;
     static constexpr int16_t H = 160;
     bool px[H][W] = {};
+    node::Ink ink[H][W] = {};
     int count = 0;
 
-    void pixel(int16_t x, int16_t y) override {
+    void pixel(int16_t x, int16_t y, node::Ink c) override {
         if (x < 0 || y < 0 || x >= W || y >= H) return;
         px[y][x] = true;
+        ink[y][x] = c;
         ++count;
+    }
+    bool all_ink(node::Ink c) const {
+        for (int16_t y = 0; y < H; ++y)
+            for (int16_t x = 0; x < W; ++x)
+                if (px[y][x] && ink[y][x] != c) return false;
+        return true;
     }
     int16_t filled_width() const {
         int16_t w = 0;
@@ -120,6 +128,19 @@ void test_glyph_outside_subset_is_skipped() {
     TEST_ASSERT_EQUAL_INT16(width_of("AA", 72), width_of("A\xEB\xB7\x81" "A", 72));  // "A뷁A"
 }
 
+// 글자 색이 글립 픽셀까지 전달돼야 한다 — 빨강 밴드 위 흰 글자(Paper)가 이걸로 난다.
+void test_text_ink_is_passed_through() {
+    Canvas c;
+    node::draw_utf8(c, g_font, 0, 0, "\xED\x95\x9C", 72, c.W, node::Ink::Paper);  // "한"
+
+    TEST_ASSERT_GREATER_THAN_INT(0, c.count);
+    TEST_ASSERT_TRUE(c.all_ink(node::Ink::Paper));
+
+    Canvas r;
+    node::draw_utf8(r, g_font, 0, 0, "\xED\x95\x9C", 72, r.W, node::Ink::Red);
+    TEST_ASSERT_TRUE(r.all_ink(node::Ink::Red));
+}
+
 // 잘린 UTF-8(무선에서 페이로드가 깨진 경우)에 버퍼를 밟으면 안 된다.
 void test_truncated_utf8_does_not_overrun() {
     TEST_ASSERT_EQUAL_INT16(width_of("A", 72), width_of("A\xED\x95", 72));  // 3바이트 중 2개만
@@ -135,6 +156,7 @@ int main() {
     RUN_TEST(test_missing_size_falls_back_to_smaller_native);
     RUN_TEST(test_text_wider_than_field_is_clipped);
     RUN_TEST(test_glyph_outside_subset_is_skipped);
+    RUN_TEST(test_text_ink_is_passed_through);
     RUN_TEST(test_truncated_utf8_does_not_overrun);
     return UNITY_END();
 }

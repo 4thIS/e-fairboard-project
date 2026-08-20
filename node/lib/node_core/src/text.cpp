@@ -114,7 +114,7 @@ bool BakedFont::glyph(uint8_t px, uint32_t cp, uint8_t out[MAX_GLYPH_BYTES], uin
 }
 
 int16_t draw_utf8(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, const char* utf8,
-                  uint8_t px, int16_t max_w) {
+                  uint8_t px, int16_t max_w, Ink ink) {
     if (!utf8 || px == 0) return 0;
 
     int16_t pen = 0;
@@ -137,7 +137,7 @@ int16_t draw_utf8(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, con
             for (uint8_t gx = 0; gx < cell; ++gx) {
                 const uint8_t byte = bits[(size_t)gy * row_bytes + (gx >> 3)];
                 if (!(byte & (0x80 >> (gx & 7)))) continue;
-                canvas.pixel(x + pen + gx, y + gy);
+                canvas.pixel(x + pen + gx, y + gy, ink);
             }
         }
         pen += w;

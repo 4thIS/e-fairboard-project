@@ -53,19 +53,26 @@ private:
     uint8_t set_count_ = 0;
 };
 
+// 3색 패널의 잉크 (12.48"(B) V2 = 픽셀당 흰/검/빨).
+// Paper 는 두 플레인을 모두 지워 종이를 드러낸다 — 빨강 밴드 위 흰 글자(knockout)용.
+// 인수인계서(HANDOFF_NODE_LAYOUT_RED)의 Ch 와 같은 것 — 글자 렌더러 안에서 Ch 는
+// character 로 읽혀 헷갈리므로 Ink 로 부른다.
+enum class Ink : uint8_t { Black = 0, Red = 1, Paper = 2 };
+
 struct ICanvas {
     virtual ~ICanvas() = default;
-    virtual void pixel(int16_t x, int16_t y) = 0;  // 검은 점 하나
+    virtual void pixel(int16_t x, int16_t y, Ink ink) = 0;  // 점 하나
 };
 
 // UTF-8 문자열을 (x, y) 왼쪽-위 기준, px 높이(=templates.py font_size)로 그린다.
 //
 // 확대가 없다 — px 에 맞는 native 글립을 그대로 찍는다 (계단 없음).
+// ink 는 글립 픽셀의 색 — Paper 면 밑에 깔린 밴드를 지워 흰 글자가 된다.
 // max_w 를 넘는 글자는 그리지 않는다(잘라냄) — 캔버스를 밟지 않기 위해.
 // 잘린 UTF-8 시퀀스는 버린다 — 무선에서 페이로드가 깨져도 버퍼를 밟으면 안 된다.
 //
 // 반환값: 실제로 그린 폭(px).
 int16_t draw_utf8(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, const char* utf8,
-                  uint8_t px, int16_t max_w);
+                  uint8_t px, int16_t max_w, Ink ink = Ink::Black);
 
 }  // namespace node
