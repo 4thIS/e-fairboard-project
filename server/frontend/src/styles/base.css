@@ -7,10 +7,17 @@ body {
   font-size: 14px;
 }
 
-/* 미리보기 글자 — 노드가 32px 나눔고딕(벡터)로 전환 → 웹도 매끈한 한글 산세리프로.
-   나눔고딕 woff2 를 번들하면 정확히 일치(후속). 지금은 나눔고딕 있으면 그걸, 없으면 시스템 산세리프. */
+/* 미리보기 글자 — 노드와 같은 폰트(나눔스퀘어 Bold)를 번들해 정확히 일치시킨다.
+   폭은 font_advance.json(노드 bin 과 같은 값)으로 clip 이 계산 (text.ts). */
+@font-face {
+  font-family: 'NanumSquare';
+  src: url('/NanumSquareB.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
 .pix {
-  font-family: 'NanumGothic', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  font-family: 'NanumSquare', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  font-weight: 700;
 }
 
 .btn {
