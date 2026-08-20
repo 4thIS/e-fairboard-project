@@ -14,6 +14,7 @@
   /* e-Paper 미리보기 내부 — EpaperPreview.vue 가 참조 (복원 코드와 이름 계약) */
   --ink:       #1A1A1A;
   --paper:     #FFFFFF;
+  --red:       #C8352A;   /* 3색 e-Paper 스팟 빨강 */
 
   --mono: ui-monospace, Consolas, 'D2Coding', monospace;
 }
