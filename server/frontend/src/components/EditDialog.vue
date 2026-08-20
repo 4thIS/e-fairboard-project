@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import type { NodeInfo, Post } from '../api'
 import { errorMessage } from '../api/client'
 import { clip, utf8Bytes } from '../epaper/text'
@@ -18,10 +18,9 @@ onMounted(() => dialog.value?.showModal())
 
 const QR_MAX_BYTES = 198   // 백엔드 _MAX_TEXT_BYTES 와 동일 (schemas.py)
 
-/** 편집 대상: 노드의 현재 게시물로 시작. 'new' = 새 게시물. */
+/** 편집 대상 = 이 노드의 현재 게시물(없으면 새로 등록). 노드마다 하나. */
 const currentPost = props.node.current_post_id == null
   ? null : posts.byId.get(props.node.current_post_id) ?? null
-const postChoice = ref<number | 'new'>(currentPost?.id ?? 'new')
 
 const form = reactive({
   title: '',
@@ -38,7 +37,6 @@ function loadForm(p: Post | null) {
   form.qr_url = p?.qr_url ?? ''
 }
 loadForm(currentPost)
-watch(postChoice, (c) => loadForm(c === 'new' ? null : posts.byId.get(c) ?? null))
 
 const template = computed(() =>
   posts.templates.find(t => t.id === form.template_id) ?? null)
@@ -82,7 +80,7 @@ async function save() {
     const fields: Record<string, string> = {}
     for (const f of t.fields) fields[String(f.id)] = form.fields[String(f.id)] ?? ''
     const body = { title: form.title || t.name, template_id: t.id, fields, qr_url: form.qr_url }
-    const saved = await posts.save(postChoice.value === 'new' ? null : postChoice.value, body)
+    const saved = await posts.save(currentPost?.id ?? null, body)
     await deployments.deployToNode(saved, props.node.id, refreshMode.value)
     emit('close')
   } catch (e) {
@@ -102,12 +100,6 @@ async function save() {
 
     <div class="cols">
       <div class="form">
-        <label for="post">게시물</label>
-        <select id="post" v-model="postChoice" class="input">
-          <option v-for="p in posts.list" :key="p.id" :value="p.id">{{ p.title }} #{{ p.id }}</option>
-          <option value="new">+ 새로 만들기</option>
-        </select>
-
         <label for="title">게시물 이름</label>
         <input id="title" v-model="form.title" class="input" :placeholder="template?.name" />
 
