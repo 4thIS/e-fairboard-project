@@ -57,7 +57,7 @@ int16_t draw_utf8(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, con
 
         for (uint8_t gy = 0; gy < GLYPH_CELL; ++gy) {
             for (uint8_t gx = 0; gx < advance; ++gx) {
-                const uint8_t byte = bits[gy * 2 + (gx >> 3)];
+                const uint8_t byte = bits[gy * (GLYPH_CELL / 8) + (gx >> 3)];
                 if (!(byte & (0x80 >> (gx & 7)))) continue;
 
                 const int16_t px = x + pen + static_cast<int16_t>(gx) * scale;

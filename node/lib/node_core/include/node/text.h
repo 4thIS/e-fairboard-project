@@ -5,15 +5,16 @@
 
 namespace node {
 
-// 글립은 전부 16x16 셀에 32바이트 고정 (16행 x 2바이트, MSB first).
-// ASCII 는 왼쪽 8비트만 쓰고 advance 만 8px — 한글은 16px 전각.
-constexpr uint8_t GLYPH_CELL = 16;
-constexpr size_t GLYPH_BYTES = 32;
+// 글립은 전부 32x32 셀에 128바이트 고정 (32행 x 4바이트, MSB first).
+// ASCII 는 왼쪽 16비트만 쓰고 advance 만 16px — 한글은 32px 전각.
+// 16px 셀에서 32px 벡터 래스터로 교체(HANDOFF_FONT_HIRES) — 큰 글씨 확대 배율 반감.
+constexpr uint8_t GLYPH_CELL = 32;
+constexpr size_t GLYPH_BYTES = 128;
 
 // 폰트 데이터를 어디에 두든(플래시 PROGMEM / LittleFS / 호스트 파일) 렌더러는 모른다.
 struct IGlyphSource {
     virtual ~IGlyphSource() = default;
-    // 없는 글자면 false. advance_px 는 8(ASCII) 또는 16(한글).
+    // 없는 글자면 false. advance_px 는 16(ASCII) 또는 32(한글).
     virtual bool glyph(uint32_t codepoint, uint8_t out[GLYPH_BYTES], uint8_t& advance_px) = 0;
 };
 

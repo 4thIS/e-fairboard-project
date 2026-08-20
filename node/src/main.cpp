@@ -18,10 +18,10 @@
 #include <node/layout.h>
 #include <node/text.h>
 
-// 16px 한글 비트맵 (node/src/font_data.cpp — Neo둥근모 SIL OFL 1.1 파생, assets/OFL.txt).
+// 32px 한글 비트맵 (node/src/font_data.cpp — Neo둥근모 SIL OFL 1.1 파생, assets/OFL.txt).
 // 완성형 전체 11,172자 + ASCII. 서브셋이 아니라 서버 입력 검증이 필요 없다 (이슈 #12).
-extern const uint8_t EFB_HANGUL16[] PROGMEM;
-extern const size_t EFB_HANGUL16_LEN;
+extern const uint8_t EFB_HANGUL32[] PROGMEM;
+extern const size_t EFB_HANGUL32_LEN;
 
 #ifndef EFB_NODE_ID
 #define EFB_NODE_ID 0x01  // 노드마다 다르게 — platformio.ini 의 build_flags 로 덮어쓴다
@@ -76,24 +76,24 @@ public:
     }
 };
 
-// 16px 한글 비트맵 폰트 — PROGMEM. 완성형 전체(11,172자)라 서브셋 두부가 없다 (이슈 #12).
+// 32px 한글 비트맵 폰트 — PROGMEM. 완성형 전체(11,172자)라 서브셋 두부가 없다 (이슈 #12).
 class ProgmemFont : public node::IGlyphSource {
 public:
     bool glyph(uint32_t cp, uint8_t out[node::GLYPH_BYTES], uint8_t& advance_px) override {
         size_t index;
         if (cp >= 0x20 && cp <= 0x7E) {
             index = cp - 0x20;
-            advance_px = 8;  // ASCII 반각
+            advance_px = 16;  // ASCII 반각
         } else if (cp >= 0xAC00 && cp <= 0xD7A3) {
             index = 95 + (cp - 0xAC00);  // ASCII 95자 다음
-            advance_px = 16;             // 한글 전각
+            advance_px = 32;             // 한글 전각
         } else {
             return false;
         }
         const size_t off = index * node::GLYPH_BYTES;
-        if (off + node::GLYPH_BYTES > EFB_HANGUL16_LEN) return false;
+        if (off + node::GLYPH_BYTES > EFB_HANGUL32_LEN) return false;
         for (size_t i = 0; i < node::GLYPH_BYTES; ++i) {
-            out[i] = pgm_read_byte(EFB_HANGUL16 + off + i);
+            out[i] = pgm_read_byte(EFB_HANGUL32 + off + i);
         }
         return true;
     }
