@@ -107,15 +107,29 @@ public:
         do {
             epd.fillScreen(GxEPD_WHITE);
 
+            // 장식 → 라벨 → 필드 → QR (12.48"와 같은 순서). 이 패널은 흑백이라 빨강
+            // 장식도 검정으로 나온다 — 배치는 같고 색만 떨어진다.
+            for (uint8_t i = 0; i < tpl->deco_count; ++i) {
+                const node::Deco& d = tpl->decos[i];
+                if (d.fill) fill_rect(d.x, d.y, d.w, d.h, deco_ink(d.fill));
+                if (d.stroke) stroke_rect(d.x, d.y, d.w, d.h, d.stroke_w, deco_ink(d.stroke));
+            }
+            for (uint8_t i = 0; i < tpl->label_count; ++i) {
+                const node::Label& l = tpl->labels[i];
+                if (!l.text) continue;
+                node::draw_utf8(*this, g_font, l.x, l.y, l.text, l.font_size,
+                                tpl->canvas_w - l.x, field_ink(l.color));
+            }
             for (uint8_t i = 0; i < tpl->field_count; ++i) {
                 const node::FieldDef& f = tpl->fields[i];
                 if (f.id >= node::MAX_FIELDS || !s.has_field[f.id]) continue;
 
                 // 폭을 넘는 글자는 draw_utf8 이 잘라낸다 — 화면 밖으로 절대 안 나간다.
-                // 서버가 max_bytes 로 막지만 ASCII 는 반각이라 바이트 상한만으로는 못
-                // 막는다 — 픽셀로 잰다.
+                // 서버가 max_bytes 로 막지만 비례폭이라 바이트 상한만으로는 못 막는다 —
+                // 픽셀로 잰다.
                 const int16_t avail = node::field_avail_w(f, tpl->qr, tpl->canvas_w);
-                node::draw_utf8(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, avail);
+                node::draw_utf8(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, avail,
+                                field_ink(f.color));
             }
 
             if (s.has_qr) draw_qr(s.qr_url, tpl->qr);
@@ -123,6 +137,30 @@ public:
     }
 
 private:
+    // templates.h 색 코드 → 잉크. 글자·라벨 0=검정 1=빨강 2=종이 / 장식 1=검정 2=빨강.
+    static node::Ink field_ink(uint8_t c) {
+        return c == 1 ? node::Ink::Red : c == 2 ? node::Ink::Paper : node::Ink::Black;
+    }
+    static node::Ink deco_ink(uint8_t c) {
+        return c == 2 ? node::Ink::Red : node::Ink::Black;
+    }
+
+    void fill_rect(int16_t x, int16_t y, int16_t w, int16_t h, node::Ink ink) {
+        for (int16_t dy = 0; dy < h; ++dy)
+            for (int16_t dx = 0; dx < w; ++dx) pixel(x + dx, y + dy, ink);
+    }
+    void stroke_rect(int16_t x, int16_t y, int16_t w, int16_t h, int16_t sw, node::Ink ink) {
+        if (sw <= 0 || w <= 0 || h <= 0) return;
+        if (sw * 2 >= w || sw * 2 >= h) {
+            fill_rect(x, y, w, h, ink);
+            return;
+        }
+        fill_rect(x, y, w, sw, ink);
+        fill_rect(x, y + h - sw, w, sw, ink);
+        fill_rect(x, y + sw, sw, h - 2 * sw, ink);
+        fill_rect(x + w - sw, y + sw, sw, h - 2 * sw, ink);
+    }
+
     // QR은 URL 문자열만 받아 노드가 직접 렌더한다 — 대역폭 최소화 (PROTOCOL.md §4).
     void draw_qr(const char* url, const node::QrDef& box) {
         const size_t len = strlen(url);

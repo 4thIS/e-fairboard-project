@@ -149,6 +149,8 @@ public:
         fill_rect(x + w - sw, y + sw, sw, h - 2 * sw, ink);
     }
 
+    // 그리는 순서: 장식 → 고정 라벨 → 필드 → QR. 장식이 먼저라 밴드 위에 글자가 얹힌다
+    // (HANDOFF_NODE_LAYOUT_RED §2-④). 세로 회전은 pixel() 안에 있어 전부 그대로 통과한다.
     void render(const node::DisplayState& s, uint8_t refresh_mode) override {
         const node::TemplateDef* tpl = node::find_template(s.template_id);
         if (!tpl) return;
@@ -156,11 +158,23 @@ public:
         logical_w_ = tpl->canvas_w;
         logical_h_ = tpl->canvas_h;
         draw_pass([&] {
+            for (uint8_t i = 0; i < tpl->deco_count; ++i) {
+                const node::Deco& d = tpl->decos[i];
+                if (d.fill) fill_rect(d.x, d.y, d.w, d.h, deco_ink(d.fill));
+                if (d.stroke) stroke_rect(d.x, d.y, d.w, d.h, d.stroke_w, deco_ink(d.stroke));
+            }
+            for (uint8_t i = 0; i < tpl->label_count; ++i) {
+                const node::Label& l = tpl->labels[i];
+                if (!l.text) continue;
+                node::draw_utf8(*this, g_font, l.x, l.y, l.text, l.font_size,
+                                tpl->canvas_w - l.x, field_ink(l.color));
+            }
             for (uint8_t i = 0; i < tpl->field_count; ++i) {
                 const node::FieldDef& f = tpl->fields[i];
                 if (f.id >= node::MAX_FIELDS || !s.has_field[f.id]) continue;
                 const int16_t avail = node::field_avail_w(f, tpl->qr, tpl->canvas_w);
-                node::draw_utf8(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, avail);
+                node::draw_utf8(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, avail,
+                                field_ink(f.color));
             }
             if (s.has_qr) draw_qr(s.qr_url, tpl->qr);
         });
@@ -180,6 +194,15 @@ public:
     }
 
 private:
+    // templates.h 의 색 코드 → 잉크. 글자·라벨은 0=검정 1=빨강 2=종이,
+    // 장식 fill/stroke 는 0=none(호출 전에 걸러짐) 1=검정 2=빨강 — 값이 한 칸 밀려 있다.
+    static node::Ink field_ink(uint8_t c) {
+        return c == 1 ? node::Ink::Red : c == 2 ? node::Ink::Paper : node::Ink::Black;
+    }
+    static node::Ink deco_ink(uint8_t c) {
+        return c == 2 ? node::Ink::Red : node::Ink::Black;
+    }
+
     uint8_t* buf_k_ = nullptr;  // 검정 플레인 (0x10)
     uint8_t* buf_r_ = nullptr;  // 빨강 플레인 (0x13)
     int quad_ = 0;
