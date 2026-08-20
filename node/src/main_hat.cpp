@@ -24,13 +24,13 @@
 #include <node/templates.h>
 #include <node/text.h>
 
-// 32/48/64px 베이크 폰트 (gen_font_data.py 생성 — main.cpp와 공유). 폰트 렌더 V2 §A.
-extern const uint8_t EFB_COMMON32[];
-extern const size_t EFB_COMMON32_LEN;
-extern const uint8_t EFB_COMMON48[];
-extern const size_t EFB_COMMON48_LEN;
-extern const uint8_t EFB_COMMON64[];
-extern const size_t EFB_COMMON64_LEN;
+// 40/56/72px 베이크 폰트 Bold (gen_font_data.py 생성 — main.cpp와 공유). 폰트 렌더 V2.
+extern const uint8_t EFB_COMMON40[];
+extern const size_t EFB_COMMON40_LEN;
+extern const uint8_t EFB_COMMON56[];
+extern const size_t EFB_COMMON56_LEN;
+extern const uint8_t EFB_COMMON72[];
+extern const size_t EFB_COMMON72_LEN;
 
 #ifndef EFB_NODE_ID
 #define EFB_NODE_ID 0x01
@@ -94,11 +94,18 @@ public:
 // 크기별 bin 3개를 든 베이크 폰트 — setup 에서 add() 로 등록.
 node::BakedFont g_font;
 
-// 3색 패널 전체 갱신은 ~18초(실측) — 서버 T_ack 안에 못 끝나므로 ACK는 렌더 전에 나간다
-// (상태머신이 send_ack 후 commit 하는 순서라 자동으로 그렇게 된다).
+// 3색 패널 전체 갱신은 ~18초(실측) — 서버 T_ack 안에 못 끝난다. 상태머신은 렌더를 먼저
+// 돌리고 ACK 를 나중에 보내므로(state_machine.cpp), 첫 COMMIT 은 타임아웃 나고 재전송에서
+// 성공한다. 중복 갱신은 멱등 키를 렌더 전에 찍어 막는다.
 class EpdDisplay : public node::IDisplay, public node::ICanvas {
 public:
-    void pixel(int16_t x, int16_t y) override { epd.drawPixel(x, y, GxEPD_BLACK); }
+    // 7.5"(B)도 3색이라 빨강을 그대로 낼 수 있다. Paper 는 흰색으로 덮어 밴드를 뚫는다.
+    void pixel(int16_t x, int16_t y, node::Ink ink) override {
+        const uint16_t c = ink == node::Ink::Red     ? GxEPD_RED
+                           : ink == node::Ink::Paper ? GxEPD_WHITE
+                                                     : GxEPD_BLACK;
+        epd.drawPixel(x, y, c);
+    }
 
     void render(const node::DisplayState& s, uint8_t refresh_mode) override {
         const node::TemplateDef* tpl = node::find_template(s.template_id);
@@ -126,7 +133,7 @@ public:
         epd.firstPage();
         do {
             epd.fillScreen(GxEPD_WHITE);
-            node::draw_utf8(*this, g_font, 24, 24, msg, 48, 800 - 24);
+            node::draw_utf8(*this, g_font, 24, 24, msg, 56, 800 - 24);
         } while (epd.nextPage());
     }
 
@@ -224,9 +231,9 @@ void setup() {
     Serial2.begin(LORA_BAUD, SERIAL_8N1, LORA_RX, LORA_TX);
     configureHat();
 
-    if (!g_font.add(EFB_COMMON32, EFB_COMMON32_LEN) ||
-        !g_font.add(EFB_COMMON48, EFB_COMMON48_LEN) ||
-        !g_font.add(EFB_COMMON64, EFB_COMMON64_LEN)) {
+    if (!g_font.add(EFB_COMMON40, EFB_COMMON40_LEN) ||
+        !g_font.add(EFB_COMMON56, EFB_COMMON56_LEN) ||
+        !g_font.add(EFB_COMMON72, EFB_COMMON72_LEN)) {
         Serial.println("[font] 폰트 bin 헤더 불일치 — 텍스트는 그려지지 않는다");
     }
 

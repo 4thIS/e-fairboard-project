@@ -18,14 +18,14 @@
 #include <node/layout.h>
 #include <node/text.h>
 
-// 32/48/64px 베이크 폰트 (node/src/font_data.cpp — gen_font_data.py 생성, SIL OFL 1.1).
-// KS X 1001 상용 2,350자 + ASCII — 서브셋 밖 희귀 음절은 서버 입력검증이 막는다 (V2).
-extern const uint8_t EFB_COMMON32[];
-extern const size_t EFB_COMMON32_LEN;
-extern const uint8_t EFB_COMMON48[];
-extern const size_t EFB_COMMON48_LEN;
-extern const uint8_t EFB_COMMON64[];
-extern const size_t EFB_COMMON64_LEN;
+// 40/56/72px 베이크 폰트 (node/src/font_data.cpp — gen_font_data.py 생성, SIL OFL 1.1).
+// 자주쓰는 2,000자 + ASCII — 목록 밖 드문 음절은 서버 입력검증이 막는다 (V2).
+extern const uint8_t EFB_COMMON40[];
+extern const size_t EFB_COMMON40_LEN;
+extern const uint8_t EFB_COMMON56[];
+extern const size_t EFB_COMMON56_LEN;
+extern const uint8_t EFB_COMMON72[];
+extern const size_t EFB_COMMON72_LEN;
 
 #ifndef EFB_NODE_ID
 #define EFB_NODE_ID 0x01  // 노드마다 다르게 — platformio.ini 의 build_flags 로 덮어쓴다
@@ -88,7 +88,10 @@ node::BakedFont g_font;
 // 하드웨어 도착 후 실측할 것 — 넘으면 COMMIT 전용 T_ack 을 우진과 협의해야 한다.
 class EpdDisplay : public node::IDisplay, public node::ICanvas {
 public:
-    void pixel(int16_t x, int16_t y) override { epd.drawPixel(x, y, GxEPD_BLACK); }
+    // 2.9"는 흑백이라 빨강을 못 낸다 — 검정으로 떨어뜨린다(안 보이는 것보다 낫다).
+    void pixel(int16_t x, int16_t y, node::Ink ink) override {
+        epd.drawPixel(x, y, ink == node::Ink::Paper ? GxEPD_WHITE : GxEPD_BLACK);
+    }
 
     void render(const node::DisplayState& s, uint8_t refresh_mode) override {
         const node::TemplateDef* tpl = node::find_template(s.template_id);
@@ -163,9 +166,9 @@ node::StateMachine sm(EFB_NODE_ID, radio_out, clock_, display, battery);
 void setup() {
     Serial.begin(115200);
 
-    if (!g_font.add(EFB_COMMON32, EFB_COMMON32_LEN) ||
-        !g_font.add(EFB_COMMON48, EFB_COMMON48_LEN) ||
-        !g_font.add(EFB_COMMON64, EFB_COMMON64_LEN)) {
+    if (!g_font.add(EFB_COMMON40, EFB_COMMON40_LEN) ||
+        !g_font.add(EFB_COMMON56, EFB_COMMON56_LEN) ||
+        !g_font.add(EFB_COMMON72, EFB_COMMON72_LEN)) {
         Serial.println("[font] 폰트 bin 헤더 불일치 — 텍스트는 그려지지 않는다");
     }
 
