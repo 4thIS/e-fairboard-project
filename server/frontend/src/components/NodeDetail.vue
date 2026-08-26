@@ -70,7 +70,7 @@ async function ping() {
     <div class="screen" :class="{ dim: offline && !deploy }">
       <EpaperPreview
         :template="template" :fields="previewSrc?.fields ?? {}"
-        :qr-url="previewSrc?.qr_url ?? ''" :box-w="300" :box-h="300"
+        :qr-url="previewSrc?.qr_url ?? ''" :box-w="240" :box-h="340"
       />
       <DeployOverlay
         v-if="deploy" :nd="deploy"
@@ -119,9 +119,9 @@ async function ping() {
 </template>
 
 <style scoped>
-.detail { display: grid; grid-template-columns: minmax(160px, 260px) 1fr; gap: 24px; padding: 22px; align-items: start; }
+.detail { display: grid; grid-template-columns: 240px 1fr; gap: 24px; padding: 22px; align-items: start; }
 @media (max-width: 620px) { .detail { grid-template-columns: 1fr; } }
-.screen { position: relative; display: flex; justify-content: center; }
+.screen { position: relative; display: flex; justify-content: center; min-width: 0; }
 .screen.dim :deep(.epd) { filter: brightness(.9) grayscale(.15); opacity: .8; }
 .info { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .titlerow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
