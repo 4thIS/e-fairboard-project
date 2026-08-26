@@ -38,5 +38,16 @@ export const useNodes = defineStore('nodes', () => {
 
   const onlineCount = computed(() => list.value.filter(n => n.status === 'online').length)
 
-  return { list, connected, virtualMode, onlineCount, fetch, detectMode, startPolling, stopPolling }
+  async function addNode(id: number, name: string) {
+    const node = await api.createNode(id, name)
+    await fetch()
+    return node
+  }
+  async function removeNode(id: number) {
+    await api.deleteNode(id)
+    await fetch()
+  }
+
+  return { list, connected, virtualMode, onlineCount, fetch, detectMode,
+           startPolling, stopPolling, addNode, removeNode }
 })

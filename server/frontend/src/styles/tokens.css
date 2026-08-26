@@ -1,20 +1,47 @@
-/* 다크 관제센터 팔레트 (스펙 §4) */
+/* E-FairBoard 관제 콘솔 팔레트 — 쿨 슬레이트 (라이트 기본 + 다크 대응) */
 :root {
-  --bg:        #0E1116;   /* 페이지 배경 */
-  --panel:     #161B22;   /* 카드·다이얼로그 */
-  --border:    #2D333B;   /* 패널 테두리·구분선 */
-  --input-bg:  #0E1116;
-  --text:      #E6EDF3;
-  --muted:     #8B949E;
-  --ok:        #3FB950;   /* 온라인·성공 */
-  --err:       #F85149;   /* 오프라인·실패·경고 */
-  --busy:      #D29922;   /* 배포 중 */
-  --action:    #238636;   /* 주요 버튼 */
+  /* 중립 (앱 표면·텍스트) */
+  --ground:#e9ecf0; --surface:#ffffff; --surface-2:#f4f6f8;
+  --line:#dce0e6; --line-2:#c6ccd4;
+  --ink:#191e25; --ink-2:#464e59; --muted:#79818d;
+  --accent:#2c6ea3;
 
-  /* e-Paper 미리보기 내부 — EpaperPreview.vue 가 참조 (복원 코드와 이름 계약) */
-  --ink:       #1A1A1A;
-  --paper:     #FFFFFF;
-  --red:       #C8352A;   /* 3색 e-Paper 스팟 빨강 */
+  /* 의미색 — 강조색과 분리 */
+  --ok:#2c9c5b; --warn:#b9821c; --info:#3a71c4; --danger:#c8352a;
+  --tint-ok:#e4f4ea; --tint-warn:#f7edda; --tint-info:#e7effb; --tint-danger:#f8e6e3;
 
-  --mono: ui-monospace, Consolas, 'D2Coding', monospace;
+  /* e-Paper 미리보기 — 물리 패널이라 테마 불변 (EpaperPreview 가 --epd-* 참조) */
+  --epd-paper:#fbfaf6; --epd-ink:#232323; --epd-red:#c8352a;
+
+  --radius:11px;
+  --shadow:0 1px 2px rgba(20,26,34,.05), 0 8px 24px -14px rgba(20,26,34,.18);
+  --sans:'IBM Plex Sans KR', system-ui, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
+
+  /* 하위호환 별칭 — 기존 컴포넌트가 쓰는 이름은 새 토큰으로 매핑 */
+  --bg:var(--ground); --panel:var(--surface); --panel-2:var(--surface-2);
+  --border:var(--line); --input-bg:var(--surface);
+  --text:var(--ink); --action:var(--accent);
+  --err:var(--danger); --busy:var(--info);
+}
+
+@media (prefers-color-scheme:dark) {
+  :root:not([data-theme="light"]) {
+    --ground:#0f1216; --surface:#191d23; --surface-2:#1f242b;
+    --line:#2a2f38; --line-2:#39404a;
+    --ink:#e8ebef; --ink-2:#aeb6c1; --muted:#7c8593;
+    --accent:#63a3d8;
+    --ok:#48b978; --warn:#d3a24d; --info:#6a9de0; --danger:#e0574c;
+    --tint-ok:#16311f; --tint-warn:#332913; --tint-info:#182640; --tint-danger:#331a17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#0f1216; --surface:#191d23; --surface-2:#1f242b;
+  --line:#2a2f38; --line-2:#39404a;
+  --ink:#e8ebef; --ink-2:#aeb6c1; --muted:#7c8593;
+  --accent:#63a3d8;
+  --ok:#48b978; --warn:#d3a24d; --info:#6a9de0; --danger:#e0574c;
+  --tint-ok:#16311f; --tint-warn:#332913; --tint-info:#182640; --tint-danger:#331a17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.6);
 }
