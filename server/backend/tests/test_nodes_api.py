@@ -61,3 +61,12 @@ def test_create_and_delete_node(client, auth_headers):
     assert client.delete(f"/api/nodes/{nid}", headers=auth_headers).status_code == 204
     assert nid not in {n["id"] for n in client.get("/api/nodes", headers=auth_headers).json()}
     assert client.delete(f"/api/nodes/{nid}", headers=auth_headers).status_code == 404
+
+
+def test_reset_all_clears_content(client, auth_headers):
+    r = client.post("/api/nodes/reset", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and body["nodes"] >= 1
+    nodes = client.get("/api/nodes", headers=auth_headers).json()
+    assert all(n["current_post_id"] is None for n in nodes)

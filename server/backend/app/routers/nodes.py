@@ -52,6 +52,28 @@ def create_node(body: NodeCreate, store: Store = Depends(get_store),
     return data
 
 
+@router.post("/reset")
+async def reset_all(store: Store = Depends(get_store), rig=Depends(get_rig)) -> dict:
+    """행사 종료 — 전 노드를 브로드캐스트로 기본(대기) 화면으로 동시 초기화."""
+    sent = False
+    if rig is not None:
+        try:
+            await rig.link.broadcast(MsgType.RESET)
+            sent = True
+        except Exception:
+            sent = False
+    rig_nodes = getattr(rig, "nodes", None) if rig is not None else None
+    for n in store.state.nodes.values():
+        n.current_post_id = None
+        if rig_nodes and n.id in rig_nodes:
+            try:
+                rig_nodes[n.id].display_state = None
+            except Exception:
+                pass
+    store.save()
+    return {"ok": True, "broadcast": sent, "nodes": len(store.state.nodes)}
+
+
 @router.delete("/{node_id}", status_code=204)
 def delete_node(node_id: int, store: Store = Depends(get_store)) -> Response:
     _get_or_404(store, node_id)

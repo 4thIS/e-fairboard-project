@@ -3,7 +3,7 @@ import asyncio
 from ..transport.base import Transport
 from .framing import FrameAccumulator, encode_frame
 from .packet import (
-    GATEWAY_ID, AckResult, MsgType, Packet, PacketError, decode, encode, parse_ack,
+    BROADCAST, GATEWAY_ID, AckResult, MsgType, Packet, PacketError, decode, encode, parse_ack,
 )
 
 _BUSY_BACKOFF_S = 0.3
@@ -90,6 +90,18 @@ class LinkManager:
                 await asyncio.sleep(_BUSY_BACKOFF_S)  # BUSY → 대기 후 재전송
             raise LinkTimeoutError(
                 f"no valid reply from 0x{dst:02X} after {attempts} attempts")
+
+    async def broadcast(self, type_: MsgType, payload: bytes = b"", *,
+                        repeat: int = 3, gap_s: float = 0.3) -> None:
+        """ACK 없는 브로드캐스트(dst=0xFF). 모든 노드가 동시에 받는다.
+        수신 확인이 불가하므로 신뢰성 위해 repeat 회 재전송한다 (PROTOCOL.md §5 브로드캐스트)."""
+        async with self._lock:
+            for i in range(repeat):
+                seq = self._next_seq()
+                frame = encode_frame(encode(Packet(self._src, BROADCAST, type_, seq, payload)))
+                await self._transport.write(frame)
+                if i + 1 < repeat:
+                    await asyncio.sleep(gap_s)
 
     async def _wait_reply(self, dst: int, seq: int, expect: MsgType,
                           timeout: float) -> Packet | None:

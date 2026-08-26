@@ -20,6 +20,7 @@ class MsgType(IntEnum):
     SET_QR = 0x12
     COMMIT = 0x13
     IMG_FRAG = 0x14
+    RESET = 0x15   # 브로드캐스트 전체 초기화 — 노드가 기본/대기 화면으로 (ACK 없음)
     ACK = 0x20
     STATUS_REQ = 0x30
     STATUS_RES = 0x31

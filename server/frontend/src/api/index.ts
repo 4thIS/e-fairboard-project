@@ -64,6 +64,7 @@ export const api = {
   createNode: (id: number, name: string) => http.post<NodeInfo>('/nodes', { id, name }).then(r => r.data),
   deleteNode: (id: number) => http.delete(`/nodes/${id}`).then(() => undefined),
   node:    (id: number) => http.get<NodeInfo>(`/nodes/${id}`).then(r => r.data),
+  resetAll: () => http.post<{ ok: boolean; broadcast: boolean; nodes: number }>('/nodes/reset').then(r => r.data),
   history: (id: number) => http.get<StatusSample[]>(`/nodes/${id}/history`).then(r => r.data),
   ping:    (id: number) => http.post(`/nodes/${id}/ping`).then(r => r.data),
 
