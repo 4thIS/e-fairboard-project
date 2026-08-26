@@ -22,6 +22,22 @@ void StateMachine::on_radio_bytes(const uint8_t* buf, size_t len, int8_t rssi) {
         return;
     }
 
+    // RESET(0x15)은 브로드캐스트 전용·ACK 없음 (PROTOCOL.md §5). 서버가 0.3초 간격 3회 반복
+    // 송신하는데 반복마다 SEQ 가 달라 아래 (TYPE,SEQ) 중복 검출로는 못 거른다. 게다가 반복분은
+    // clear() 가 도는 34초 동안 UART 버퍼에 쌓였다가 뒤늦게 들어온다 — 그대로 두면 대기 화면을
+    // 세 번 그린다. "이미 대기 화면이면 무시"가 가장 단순한 필터다.
+    if (p.type == efb::RESET) {
+        last_seq_ = p.seq;
+        if (idle_) return;
+        staged_ = DisplayState{};
+        committed_ = DisplayState{};
+        staged_template_ = false;
+        staged_qr_ = false;
+        idle_ = true;
+        display_.clear();  // 블로킹
+        return;
+    }
+
     // 재전송(동일 TYPE,SEQ)은 재적용 없이 ACK만 (PROTOCOL.md §5).
     if (has_last_handled_ && last_type_ == p.type && last_handled_seq_ == p.seq) {
         send_ack(p, efb::OK);
@@ -48,6 +64,7 @@ void StateMachine::on_radio_bytes(const uint8_t* buf, size_t len, int8_t rssi) {
 
     if (p.type == efb::COMMIT) {
         commit_staged();
+        idle_ = false;
         display_.render(committed_, p.payload[0]);  // 블로킹 — 이 동안 무선을 못 듣는다
     }
     send_ack(p, efb::OK);

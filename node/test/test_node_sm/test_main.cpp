@@ -43,6 +43,7 @@ struct FakeBattery : node::IBattery {
 // 재진입 훅을 열어둔다.
 struct FakeDisplay : node::IDisplay {
     int render_count = 0;
+    int clear_count = 0;
     node::DisplayState last;
     uint8_t last_mode = 0xFF;
     node::StateMachine* reenter_sm = nullptr;  // 렌더 도중 도착할 패킷을 흉내낸다
@@ -60,6 +61,7 @@ struct FakeDisplay : node::IDisplay {
             reenter_sm->on_radio_bytes(buf, len, -60);
         }
     }
+    void clear() override { ++clear_count; }
 };
 
 struct Rig {
@@ -308,6 +310,69 @@ void test_corrupt_packet_is_silent_but_counted() {
     TEST_ASSERT_EQUAL_UINT8(1, r.sm.err_cnt());
 }
 
+// RESET(0x15) 은 브로드캐스트·ACK 없음 (PROTOCOL.md §5) — 배포 내용을 지우고 대기 화면을 한 번
+// 그린다. 우진의 "전체 초기화" 버튼이 이걸 쏜다.
+void test_reset_clears_committed_state_and_shows_idle_without_ack() {
+    Rig r;
+    uint8_t tpl = 0;
+    uint8_t mode = 1;
+    r.deliver(efb::SET_TEMPLATE, 1, &tpl, 1);
+    r.deliver(efb::COMMIT, 2, &mode, 1);
+    const int sent_before = r.radio.count;
+
+    r.deliver(efb::RESET, 3, nullptr, 0, efb::BROADCAST);
+
+    TEST_ASSERT_EQUAL_INT(1, r.display.clear_count);
+    TEST_ASSERT_EQUAL_INT16(-1, r.sm.display().template_id);
+    TEST_ASSERT_EQUAL_INT(sent_before, r.radio.count);   // ACK 없음
+    TEST_ASSERT_EQUAL_UINT32(0, r.clock.delayed_total);  // 브로드캐스트 ACK 슬롯 대기도 없음
+    TEST_ASSERT_EQUAL_UINT8(3, r.sm.last_seq());
+}
+
+// 서버(link.broadcast)는 RESET 을 SEQ 를 바꿔가며 0.3초 간격 3회 반복한다. 반복분은 34초짜리
+// clear() 가 도는 동안 UART 버퍼에 쌓였다가 뒤늦게 들어오므로, 이미 대기 화면이면 무시해야
+// 대기 화면을 세 번 그리지 않는다. (TYPE,SEQ) 중복 검출로는 못 거른다 — SEQ 가 다르다.
+void test_reset_repeats_are_ignored_while_idle() {
+    Rig r;
+    uint8_t tpl = 0;
+    uint8_t mode = 1;
+    r.deliver(efb::SET_TEMPLATE, 1, &tpl, 1);
+    r.deliver(efb::COMMIT, 2, &mode, 1);
+
+    r.deliver(efb::RESET, 3, nullptr, 0, efb::BROADCAST);
+    r.deliver(efb::RESET, 4, nullptr, 0, efb::BROADCAST);
+    r.deliver(efb::RESET, 5, nullptr, 0, efb::BROADCAST);
+
+    TEST_ASSERT_EQUAL_INT(1, r.display.clear_count);
+}
+
+// 부팅 직후는 이미 대기 화면이다 — 배포된 적이 없으면 RESET 은 아무것도 안 한다 (34초 절약).
+void test_reset_at_boot_is_noop() {
+    Rig r;
+    r.deliver(efb::RESET, 1, nullptr, 0, efb::BROADCAST);
+
+    TEST_ASSERT_EQUAL_INT(0, r.display.clear_count);
+    TEST_ASSERT_EQUAL_INT(0, r.radio.count);
+}
+
+// RESET 뒤 새 배포가 오면 다시 그리고, 그 뒤 RESET 도 다시 듣는다 — idle 플래그가 양방향으로 돈다.
+void test_deploy_after_reset_renders_and_can_reset_again() {
+    Rig r;
+    uint8_t tpl = 0;
+    uint8_t mode = 1;
+    r.deliver(efb::SET_TEMPLATE, 1, &tpl, 1);
+    r.deliver(efb::COMMIT, 2, &mode, 1);
+    r.deliver(efb::RESET, 3, nullptr, 0, efb::BROADCAST);
+
+    r.deliver(efb::SET_TEMPLATE, 4, &tpl, 1);
+    r.deliver(efb::COMMIT, 5, &mode, 1);
+    TEST_ASSERT_EQUAL_INT(2, r.display.render_count);
+    TEST_ASSERT_EQUAL_INT16(0, r.sm.display().template_id);
+
+    r.deliver(efb::RESET, 6, nullptr, 0, efb::BROADCAST);
+    TEST_ASSERT_EQUAL_INT(2, r.display.clear_count);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_set_field_stages_but_does_not_render);
@@ -323,5 +388,9 @@ int main() {
     RUN_TEST(test_unicast_ack_has_no_slot_delay);
     RUN_TEST(test_packet_for_other_node_is_ignored);
     RUN_TEST(test_corrupt_packet_is_silent_but_counted);
+    RUN_TEST(test_reset_clears_committed_state_and_shows_idle_without_ack);
+    RUN_TEST(test_reset_repeats_are_ignored_while_idle);
+    RUN_TEST(test_reset_at_boot_is_noop);
+    RUN_TEST(test_deploy_after_reset_renders_and_can_reset_again);
     return UNITY_END();
 }

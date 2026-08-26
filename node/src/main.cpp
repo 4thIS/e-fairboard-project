@@ -136,6 +136,15 @@ public:
         } while (epd.nextPage());
     }
 
+    // RESET(0x15) 대기 화면 — 흰 화면으로 비운다.
+    void clear() override {
+        epd.setFullWindow();
+        epd.firstPage();
+        do {
+            epd.fillScreen(GxEPD_WHITE);
+        } while (epd.nextPage());
+    }
+
 private:
     // templates.h 색 코드 → 잉크. 글자·라벨 0=검정 1=빨강 2=종이 / 장식 1=검정 2=빨강.
     static node::Ink field_ink(uint8_t c) {

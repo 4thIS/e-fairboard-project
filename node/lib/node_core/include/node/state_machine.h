@@ -22,6 +22,8 @@ struct DisplayState {
 struct IDisplay {
     virtual ~IDisplay() = default;
     virtual void render(const DisplayState& s, uint8_t refresh_mode) = 0;
+    // RESET(0x15) — 배포 내용을 지우고 대기 화면으로. 역시 블로킹.
+    virtual void clear() = 0;
 };
 
 struct IBattery {
@@ -65,6 +67,7 @@ private:
     DisplayState committed_;
     bool staged_template_ = false;
     bool staged_qr_ = false;
+    bool idle_ = true;  // 대기 화면 상태(부팅 직후 포함). RESET 반복분을 거르는 기준
 
     bool has_last_handled_ = false;
     uint8_t last_type_ = 0;
