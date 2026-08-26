@@ -16,14 +16,18 @@ function logout() {
 <template>
   <div class="shell">
     <header>
-      <h1>E-FAIRBOARD</h1>
+      <div class="brand">
+        <span class="mark">◨</span>
+        <span class="wordmark">E-FairBoard</span>
+      </div>
       <div class="status">
-        <span v-if="nodes.connected" class="ok">● 서버 연결됨</span>
-        <span v-else class="err">○ 서버 응답 없음</span>
+        <span class="conn" :class="nodes.connected ? 'ok' : 'err'">
+          <span class="dot"></span>{{ nodes.connected ? '서버 연결됨' : '서버 응답 없음' }}
+        </span>
         <span v-if="nodes.virtualMode" class="badge">가상 모드</span>
-        <span class="muted">응답 {{ nodes.onlineCount }}/{{ nodes.list.length }}</span>
-        <router-link class="btn" to="/setup/radio">무선 설정</router-link>
-        <button class="btn" @click="logout">로그아웃</button>
+        <span class="count mono">응답 {{ nodes.onlineCount }} / {{ nodes.list.length }}</span>
+        <router-link class="btn sm" to="/setup/radio">무선 설정</router-link>
+        <button class="btn sm" @click="logout">로그아웃</button>
       </div>
     </header>
     <main><slot /></main>
@@ -31,16 +35,24 @@ function logout() {
 </template>
 
 <style scoped>
-.shell { max-width: 1280px; margin: 0 auto; padding: 20px 24px; }
-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-h1 { font-size: 16px; letter-spacing: 3px; }
-.status { display: flex; align-items: center; gap: 12px; font-size: 12px; }
-.ok { color: var(--ok); }
-.err { color: var(--err); }
-.muted { color: var(--muted); }
+.shell { max-width: 1200px; margin: 0 auto; padding: 20px clamp(14px, 3vw, 28px) 60px; }
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 22px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--line-2);
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.mark { color: var(--accent); font-size: 20px; line-height: 1; }
+.wordmark { font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+.status { display: flex; align-items: center; gap: 12px; font-size: 12.5px; flex-wrap: wrap; }
+.conn { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.conn .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.conn.ok { color: var(--ok); }
+.conn.err { color: var(--danger); }
+.count { color: var(--muted); }
 .badge {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--busy); padding: 1px 6px; font-size: 11px;
+  background: var(--tint-info); color: var(--info); border-radius: 5px;
+  padding: 2px 8px; font-size: 11px; font-weight: 600;
 }
 a.btn { text-decoration: none; }
 </style>

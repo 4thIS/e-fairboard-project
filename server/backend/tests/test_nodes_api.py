@@ -45,3 +45,19 @@ def test_history_endpoint_empty_initially(client, auth_headers):
 def test_list_nodes_includes_display_state(client, auth_headers):
     nodes = client.get("/api/nodes", headers=auth_headers).json()
     assert all("display_state" in n for n in nodes)
+
+
+def test_create_and_delete_node(client, auth_headers):
+    before = {n["id"] for n in client.get("/api/nodes", headers=auth_headers).json()}
+    nid = max(before) + 5
+    res = client.post("/api/nodes", json={"id": nid, "name": "새 노드"}, headers=auth_headers)
+    assert res.status_code == 201 and res.json()["id"] == nid
+    assert nid in {n["id"] for n in client.get("/api/nodes", headers=auth_headers).json()}
+    # 중복 거부
+    assert client.post("/api/nodes", json={"id": nid}, headers=auth_headers).status_code == 409
+    # 범위 밖 거부
+    assert client.post("/api/nodes", json={"id": 999}, headers=auth_headers).status_code == 422
+    # 삭제
+    assert client.delete(f"/api/nodes/{nid}", headers=auth_headers).status_code == 204
+    assert nid not in {n["id"] for n in client.get("/api/nodes", headers=auth_headers).json()}
+    assert client.delete(f"/api/nodes/{nid}", headers=auth_headers).status_code == 404

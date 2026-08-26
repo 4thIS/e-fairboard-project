@@ -48,3 +48,11 @@ class Store:
         for nid in node_ids:
             if nid not in self.state.nodes:
                 self.state.nodes[nid] = NodeInfo(id=nid, name=f"노드 {nid}")
+
+    def add_node(self, nid: int, name: str) -> NodeInfo:
+        node = NodeInfo(id=nid, name=name)
+        self.state.nodes[nid] = node
+        return node
+
+    def remove_node(self, nid: int) -> None:
+        self.state.nodes.pop(nid, None)

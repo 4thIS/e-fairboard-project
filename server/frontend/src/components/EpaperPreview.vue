@@ -34,10 +34,10 @@ const rows = computed(() => {
 
 /** 색 이름 → CSS 변수. 노드 3색과 같은 매핑 (paper=밴드 위 흰 글자). */
 function inkVar(c: Color): string {
-  return c === 'red' ? 'var(--red)' : c === 'paper' ? 'var(--paper)' : 'var(--ink)'
+  return c === 'red' ? 'var(--epd-red)' : c === 'paper' ? 'var(--epd-paper)' : 'var(--epd-ink)'
 }
 function fillVar(c: Fill): string {
-  return c === 'red' ? 'var(--red)' : c === 'black' ? 'var(--ink)' : 'transparent'
+  return c === 'red' ? 'var(--epd-red)' : c === 'black' ? 'var(--epd-ink)' : 'transparent'
 }
 
 /** QR — 노드와 같은 버전 선택(ECC L, 길이별). 담을 수 없으면 그리지 않는다. */
@@ -69,8 +69,8 @@ watchEffect(async () => {
     errorCorrectionLevel: 'L', version, margin: 0,
     scale,
     color: {
-      dark: style.getPropertyValue('--ink').trim(),
-      light: style.getPropertyValue('--paper').trim(),
+      dark: style.getPropertyValue('--epd-ink').trim(),
+      light: style.getPropertyValue('--epd-paper').trim(),
     },
   })
   // toCanvas 가 캔버스 크기(drawn px)는 이미 맞춰준다 — 여기선 중앙 정렬 위치만 잡는다.
@@ -129,12 +129,12 @@ watchEffect(async () => {
 
 <style scoped>
 .epd {
-  background: var(--paper);
-  border: 1px solid var(--ink);   /* e-Paper 패널의 테두리 */
+  background: var(--epd-paper);
+  border: 1px solid var(--epd-ink);   /* e-Paper 패널의 테두리 */
   overflow: hidden;
 }
 .inner { position: relative; transform-origin: top left; }
 .deco { position: absolute; box-sizing: border-box; }
-.row { position: absolute; white-space: nowrap; color: var(--ink); }
+.row { position: absolute; white-space: nowrap; color: var(--epd-ink); }
 .qr { position: absolute; image-rendering: pixelated; }
 </style>
