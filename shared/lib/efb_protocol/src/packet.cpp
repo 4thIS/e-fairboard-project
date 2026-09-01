@@ -28,6 +28,7 @@ bool is_known_type(uint8_t type) {
         case SET_QR:
         case COMMIT:
         case IMG_FRAG:
+        case RESET:
         case ACK:
         case STATUS_REQ:
         case STATUS_RES:
