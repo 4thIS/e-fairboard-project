@@ -87,6 +87,23 @@ struct Rig {
         sm.on_radio_bytes(wire, n, -60);
     }
 
+    // 분할 SET_FIELD 용 — FRAG(bit7=LAST | 인덱스)를 직접 지정한다.
+    void deliver_frag(uint8_t type, uint8_t seq, const uint8_t* payload, size_t len, uint8_t frag,
+                      uint8_t dst = NODE_ID) {
+        efb::Packet p;
+        p.src = efb::GATEWAY_ID;
+        p.dst = dst;
+        p.type = type;
+        p.seq = seq;
+        p.frag = frag;
+        p.len = static_cast<uint8_t>(len);
+        if (len) memcpy(p.payload, payload, len);
+
+        uint8_t wire[efb::MAX_PACKET];
+        const size_t n = efb::encode(p, wire, sizeof(wire));
+        sm.on_radio_bytes(wire, n, -60);
+    }
+
     size_t wire_of(uint8_t type, uint8_t seq, const uint8_t* payload, size_t len, uint8_t* out) {
         efb::Packet p;
         p.src = efb::GATEWAY_ID;
@@ -373,6 +390,77 @@ void test_deploy_after_reset_renders_and_can_reset_again() {
     TEST_ASSERT_EQUAL_INT(2, r.display.clear_count);
 }
 
+// ── 분할 SET_FIELD (PROTOCOL.md §3.2) ───────────────────────────────────────
+// 서버가 필드 텍스트를 64B(SET_FIELD_CHUNK) 단위로 쪼개 보낸다 — 한글 21자만 넘어도
+// 여러 조각이다. 순서대로 이어붙이고 마지막 조각(FRAG bit7)에서만 완성으로 친다.
+void test_fragmented_field_reassembles_in_order() {
+    Rig r;
+    uint8_t payload[efb::MAX_PAYLOAD];
+
+    const uint8_t tpl = 2;
+    r.deliver(efb::SET_TEMPLATE, 1, &tpl, 1);
+
+    size_t n = set_field(0, "AAAA", payload);
+    r.deliver_frag(efb::SET_FIELD, 2, payload, n, 0x00);         // 조각 0
+    TEST_ASSERT_FALSE(r.sm.display().has_field[0]);              // 아직 미완성
+
+    n = set_field(0, "BBBB", payload);
+    r.deliver_frag(efb::SET_FIELD, 3, payload, n, 0x01);         // 조각 1
+    n = set_field(0, "CC", payload);
+    r.deliver_frag(efb::SET_FIELD, 4, payload, n, 0x02 | 0x80);  // 마지막
+
+    const uint8_t mode = 0;
+    r.deliver(efb::COMMIT, 5, &mode, 1);
+    TEST_ASSERT_EQUAL_STRING("AAAABBBBCC", r.sm.display().fields[0]);
+}
+
+// 조각 재전송(같은 SEQ)이 두 번 이어붙으면 내용이 깨진다 — 기존 (TYPE,SEQ) 멱등이 막아야 한다.
+void test_fragment_retransmit_does_not_double_append() {
+    Rig r;
+    uint8_t payload[efb::MAX_PAYLOAD];
+
+    const uint8_t tpl = 2;
+    r.deliver(efb::SET_TEMPLATE, 1, &tpl, 1);
+
+    size_t n = set_field(0, "AAAA", payload);
+    r.deliver_frag(efb::SET_FIELD, 2, payload, n, 0x00);
+    r.deliver_frag(efb::SET_FIELD, 2, payload, n, 0x00);         // 재전송
+
+    n = set_field(0, "BB", payload);
+    r.deliver_frag(efb::SET_FIELD, 3, payload, n, 0x01 | 0x80);
+
+    const uint8_t mode = 0;
+    r.deliver(efb::COMMIT, 4, &mode, 1);
+    TEST_ASSERT_EQUAL_STRING("AAAABB", r.sm.display().fields[0]);
+}
+
+// 첫 조각을 놓친 채 뒷조각부터 오면 앞이 잘린 문자열이 된다 — 거절하고 서버 재전송에 맡긴다.
+void test_fragment_without_first_chunk_is_rejected() {
+    Rig r;
+    uint8_t payload[efb::MAX_PAYLOAD];
+
+    const size_t n = set_field(0, "BBBB", payload);
+    r.deliver_frag(efb::SET_FIELD, 2, payload, n, 0x01);         // 인덱스 1 부터
+
+    r.expect_ack(2, efb::BAD_TYPE);
+    TEST_ASSERT_FALSE(r.sm.display().has_field[0]);
+}
+
+// 조각이 하나면 FRAG_SINGLE(인덱스0·LAST) — 예전 단일 SET_FIELD 와 완전히 같아야 한다.
+void test_single_fragment_is_backward_compatible() {
+    Rig r;
+    uint8_t payload[efb::MAX_PAYLOAD];
+
+    const uint8_t tpl = 2;
+    r.deliver(efb::SET_TEMPLATE, 1, &tpl, 1);
+    const size_t n = set_field(0, "hello", payload);
+    r.deliver_frag(efb::SET_FIELD, 2, payload, n, efb::FRAG_SINGLE);
+
+    const uint8_t mode = 0;
+    r.deliver(efb::COMMIT, 3, &mode, 1);
+    TEST_ASSERT_EQUAL_STRING("hello", r.sm.display().fields[0]);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_set_field_stages_but_does_not_render);
@@ -392,5 +480,9 @@ int main() {
     RUN_TEST(test_reset_repeats_are_ignored_while_idle);
     RUN_TEST(test_reset_at_boot_is_noop);
     RUN_TEST(test_deploy_after_reset_renders_and_can_reset_again);
+    RUN_TEST(test_fragmented_field_reassembles_in_order);
+    RUN_TEST(test_fragment_retransmit_does_not_double_append);
+    RUN_TEST(test_fragment_without_first_chunk_is_rejected);
+    RUN_TEST(test_single_fragment_is_backward_compatible);
     return UNITY_END();
 }

@@ -8,12 +8,14 @@ namespace node {
 // 템플릿은 최대 4필드(PROTOCOL.md §8)지만 프로토콜 자체는 field_id 1바이트를 허용한다.
 // 스펙이 늘어나도 버퍼를 밟지 않도록 여유를 두고, 범위를 넘는 field_id는 BAD_TYPE으로 거절한다.
 constexpr size_t MAX_FIELDS = 8;
-constexpr size_t MAX_TEXT_LEN = efb::MAX_TEXT;  // 198B — SET_FIELD/SET_QR 본문 한도
+constexpr size_t MAX_TEXT_LEN = efb::MAX_TEXT;  // 198B — 한 패킷 본문 한도(SET_QR)
+// 필드는 분할 SET_FIELD 로 여러 패킷에 걸쳐 온다 — 재조립 상한 (서버 FIELD_MAX_TEXT 와 동일).
+constexpr size_t FIELD_MAX_TEXT_LEN = 512;
 
 struct DisplayState {
     int16_t template_id = -1;  // -1 = 아직 없음
     bool has_field[MAX_FIELDS] = {};
-    char fields[MAX_FIELDS][MAX_TEXT_LEN + 1] = {};
+    char fields[MAX_FIELDS][FIELD_MAX_TEXT_LEN + 1] = {};
     bool has_qr = false;
     char qr_url[MAX_TEXT_LEN + 1] = {};
 };
@@ -65,6 +67,8 @@ private:
 
     DisplayState staged_;
     DisplayState committed_;
+    // 분할 SET_FIELD 재조립 진행 길이(필드별). 인덱스 0 조각에서 0 으로 되돌린다.
+    uint16_t field_len_[MAX_FIELDS] = {};
     bool staged_template_ = false;
     bool staged_qr_ = false;
     bool idle_ = true;  // 대기 화면 상태(부팅 직후 포함). RESET 반복분을 거르는 기준

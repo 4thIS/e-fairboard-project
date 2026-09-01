@@ -31,6 +31,7 @@ void StateMachine::on_radio_bytes(const uint8_t* buf, size_t len, int8_t rssi) {
         if (idle_) return;
         staged_ = DisplayState{};
         committed_ = DisplayState{};
+        for (size_t i = 0; i < MAX_FIELDS; ++i) field_len_[i] = 0;
         staged_template_ = false;
         staged_qr_ = false;
         idle_ = true;
@@ -81,13 +82,28 @@ uint8_t StateMachine::apply(const efb::Packet& p) {
         case efb::SET_FIELD: {
             if (p.len < 2) return efb::BAD_TYPE;
             const uint8_t field_id = p.payload[0];
-            const uint8_t text_len = p.payload[1];
+            const uint8_t chunk_len = p.payload[1];
             if (field_id >= MAX_FIELDS) return efb::BAD_TYPE;
-            if (text_len > MAX_TEXT_LEN) return efb::BAD_TYPE;
-            if (static_cast<size_t>(2) + text_len > p.len) return efb::BAD_TYPE;
-            memcpy(staged_.fields[field_id], p.payload + 2, text_len);
-            staged_.fields[field_id][text_len] = '\0';
-            staged_.has_field[field_id] = true;
+            if (static_cast<size_t>(2) + chunk_len > p.len) return efb::BAD_TYPE;
+
+            // 분할 SET_FIELD (PROTOCOL.md §3.2) — FRAG 는 bit7=LAST, 하위 7bit=조각 인덱스.
+            // 서버가 64B(SET_FIELD_CHUNK) 단위로 쪼개므로 한글 21자만 넘어도 여러 개로 온다.
+            // 조각이 하나면 FRAG_SINGLE(=인덱스0·LAST) 이라 예전 단일 전송과 동작이 같다.
+            const uint8_t idx = p.frag & 0x7F;
+            const bool last = (p.frag & 0x80) != 0;
+
+            if (idx == 0) {
+                field_len_[field_id] = 0;  // 새 필드 시작 — 조립 버퍼를 비운다
+            } else if (field_len_[field_id] == 0) {
+                // 첫 조각을 못 받았는데 뒷조각이 왔다 — 이어붙이면 앞이 잘린 문자열이 된다.
+                return efb::BAD_TYPE;
+            }
+            if (field_len_[field_id] + chunk_len > FIELD_MAX_TEXT_LEN) return efb::BAD_TYPE;
+
+            memcpy(staged_.fields[field_id] + field_len_[field_id], p.payload + 2, chunk_len);
+            field_len_[field_id] += chunk_len;
+            staged_.fields[field_id][field_len_[field_id]] = '\0';
+            staged_.has_field[field_id] = last;  // 마지막 조각에서만 완성으로 친다
             return efb::OK;
         }
         case efb::SET_QR: {
@@ -114,7 +130,7 @@ void StateMachine::commit_staged() {
     if (staged_template_) committed_.template_id = staged_.template_id;
     for (size_t i = 0; i < MAX_FIELDS; ++i) {
         if (!staged_.has_field[i]) continue;
-        memcpy(committed_.fields[i], staged_.fields[i], MAX_TEXT_LEN + 1);
+        memcpy(committed_.fields[i], staged_.fields[i], FIELD_MAX_TEXT_LEN + 1);
         committed_.has_field[i] = true;
     }
     if (staged_qr_) {
