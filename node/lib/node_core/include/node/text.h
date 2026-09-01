@@ -75,4 +75,15 @@ struct ICanvas {
 int16_t draw_utf8(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, const char* utf8,
                   uint8_t px, int16_t max_w, Ink ink = Ink::Black);
 
+// (x, y) 왼쪽-위 기준, 폭 max_w × 높이 max_h 영역에 여러 줄로 그린다. 줄 간격은 line_h.
+//
+// 줄 나누기 규칙은 웹 미리보기(server/frontend/src/epaper/text.ts 의 wrap())와 **같아야 한다** —
+// 판넬과 미리보기의 줄바꿈이 어긋나면 안 된다:
+//   '\n' 은 강제 줄바꿈(빈 줄도 유지), 그 외에는 공백 단위로 흘리고,
+//   한 줄보다 긴 단어만 글자 단위로 쪼갠다. max_h/line_h 줄을 넘으면 버린다.
+// line_h 는 호출자가 templates.py::line_h 와 같은 식(px*27/20)으로 넘긴다.
+void draw_multiline(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, const char* utf8,
+                    uint8_t px, int16_t max_w, int16_t max_h, int16_t line_h,
+                    Ink ink = Ink::Black);
+
 }  // namespace node

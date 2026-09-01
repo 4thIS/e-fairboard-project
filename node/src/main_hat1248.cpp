@@ -172,6 +172,14 @@ public:
             for (uint8_t i = 0; i < tpl->field_count; ++i) {
                 const node::FieldDef& f = tpl->fields[i];
                 if (f.id >= node::MAX_FIELDS || !s.has_field[f.id]) continue;
+                if (f.h > 0) {
+                    // 멀티라인 텍스트영역(설명). line_h 는 서버·웹과 같은 식이어야 줄 수가 맞는다
+                    // — templates.py::line_h == px*27//20.
+                    const int16_t lh = static_cast<int16_t>(f.font_size * 27 / 20);
+                    node::draw_multiline(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, f.w,
+                                         f.h, lh, field_ink(f.color));
+                    continue;
+                }
                 const int16_t avail = node::field_avail_w(f, tpl->qr, tpl->canvas_w);
                 node::draw_utf8(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, avail,
                                 field_ink(f.color));
@@ -180,9 +188,14 @@ public:
         });
     }
 
+    // RESET(0x15) 대기 화면 — 부팅 화면을 그대로 쓴다. 흰 화면은 죽은 패널과 구분이 안 되지만
+    // 이건 노드 번호가 보여 현장에서 어느 판인지 알 수 있다.
+    void clear() override { boot_screen(node_id_); }
+
     // 부팅 확인용. 빨강 밴드 위에 종이색 글자를 얹어 두 플레인이 다 살아있는지 눈으로 본다
     // — 배포 전에 빨강 채널 배선·반전 전송이 맞는지 확인할 유일한 화면이다.
     void boot_screen(uint8_t node_id) {
+        node_id_ = node_id;
         char msg[64];
         snprintf(msg, sizeof(msg), "노드 0x%02X — 수신 대기 중 (12.48\")", node_id);
         logical_w_ = PANEL_W;
@@ -207,6 +220,7 @@ private:
     uint8_t* buf_r_ = nullptr;  // 빨강 플레인 (0x13)
     int quad_ = 0;
     int16_t logical_w_ = PANEL_W, logical_h_ = PANEL_H;  // 현재 템플릿 캔버스 (회전 판정)
+    uint8_t node_id_ = 0;  // 대기 화면에 찍을 번호 — boot_screen() 에서 기억
 
     // 사분면마다: 두 플레인 백지 → 콘텐츠 그리기 → 컨트롤러로 전송(0x10 검정, 0x13 빨강).
     // 마지막에 전체 갱신+슬립. 드라이버는 3색 (B) V2 — 흑백 드라이버는 회색 번짐(실측 폐기).

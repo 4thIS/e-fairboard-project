@@ -69,6 +69,7 @@ transport-무관하게 구현하며, 전송 매체가 바뀌어도 이 포맷은
 | 0x12 | SET_QR | S→Node | qr_slot(1), url_len(1), URL text |
 | 0x13 | COMMIT | S→Node | refresh_mode(1): 0=부분,1=전체 |
 | 0x14 | IMG_FRAG | S→Node | (스트레치) 이미지 조각, FRAG 분할 |
+| 0x15 | RESET | S→Node (DST=0xFF) | 없음 — 전 노드 배포 내용 삭제·대기 화면. **ACK 없음**, 서버가 3회 반복 송신 |
 | 0x20 | ACK | Node→S | ack_seq(1), result(1): 0=OK,1=CRC_FAIL,2=BUSY,3=BAD_TYPE |
 | 0x30 | STATUS_REQ | S→Node | 없음 |
 | 0x31 | STATUS_RES | Node→S | batt_mV(2), last_seq(1), uptime_s(2), err_cnt(1) |
@@ -126,6 +127,10 @@ S→Node : COMMIT(refresh_mode)         스테이징 검증        →  ACK(OK) 
 - N_retry 실패 → 노드 OFFLINE 마킹 → 서버 보고.
 - **중복 검출**: 노드는 (TYPE,SEQ) 직전값과 동일 시 재적용 없이 ACK만 재전송(멱등).
 - **브로드캐스트 ACK 충돌 방지**: DST=0xFF COMMIT 시 각 노드 `NodeID×슬롯` 간격으로 ACK.
+- **RESET(0x15)은 ACK 없음**: 서버 `link.broadcast()`가 SEQ를 바꿔가며 0.3초 간격 3회 반복 송신한다.
+  노드는 **이미 대기 화면이면 무시**한다(부팅 직후 포함) — 반복분이 렌더 중 UART 버퍼에 쌓였다가
+  뒤늦게 들어오는데, SEQ가 달라 (TYPE,SEQ) 중복 검출로는 못 거르기 때문. 대기 화면은 노드가 정한다
+  (12.48"는 부팅 화면 재사용, 7.5"·2.9"는 흰 화면).
 
 ### 5.1 COMMIT ACK는 렌더 *전*에 보낸다  〔신규 — 중요〕
 

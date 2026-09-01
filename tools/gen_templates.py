@@ -61,6 +61,7 @@ def render() -> str:
         "    uint8_t color;",
         "    uint8_t max_bytes;  // UTF-8 바이트 (파생)",
         "    int16_t w;          // 명시 폭(0=QR/캔버스 자동)",
+        "    int16_t h;          // 멀티라인 텍스트영역 높이(0=한 줄)",
         "};",
         "",
         "struct Label {  // 고정 텍스트",
@@ -114,9 +115,9 @@ def render() -> str:
             # 헤더는 255 로 클램프해 narrowing 빌드 오류만 피한다.
             mb = min(255, field_max_bytes(f, t.qr, t.canvas_w))
             L.append(f'        {{{f.id}, "{_c(f.name)}", {f.x}, {f.y}, {f.font_size}, '
-                     f'{COLOR[f.color]}, {mb}, {f.w}}},')
+                     f'{COLOR[f.color]}, {mb}, {f.w}, {f.h}}},')
         for _ in range(max_fields - len(t.fields)):
-            L.append("        {0, nullptr, 0, 0, 0, 0, 0, 0},")
+            L.append("        {0, nullptr, 0, 0, 0, 0, 0, 0, 0},")
         L.append(f"    }}, {{{t.qr.x}, {t.qr.y}, {t.qr.size}}},")
 
         L.append(f"    {len(t.decorations)}, {{")
