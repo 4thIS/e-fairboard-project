@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
 import QRCode from 'qrcode'
-import { clip } from '../epaper/text'
+import { clip, wrap } from '../epaper/text'
 import { DEFAULT_CANVAS, type TemplateDef, type Color, type Fill } from '../epaper/types'
 
 const props = withDefaults(defineProps<{
@@ -27,8 +27,13 @@ const rows = computed(() => {
   if (!props.template) return []
   return props.template.fields.map((f) => {
     const raw = props.fields[String(f.id)] ?? ''
+    if (f.h) {   // 멀티라인 영역 — 줄바꿈+wrap (노드 draw_multiline 과 같은 규칙)
+      const maxLines = Math.max(1, Math.floor(f.h / f.line_h))
+      const { lines } = wrap(raw, f.avail_w, f.font_size, maxLines)
+      return { f, lines }
+    }
     const { text } = clip(raw, f.avail_w, f.font_size)
-    return { f, text }   // clip() 이 이미 렌더 불가 글자를 거른다
+    return { f, lines: [text] }   // clip() 이 이미 렌더 불가 글자를 거른다
   })
 })
 
@@ -85,7 +90,7 @@ watchEffect(async () => {
     :style="{ width: canvas.w * previewScale + 'px', height: canvas.h * previewScale + 'px' }"
     role="img"
     :aria-label="template
-      ? `${template.name}: ` + rows.map(r => `${r.f.name} ${r.text}`).join(', ')
+      ? `${template.name}: ` + rows.map(r => `${r.f.name} ${r.lines.join(' ')}`).join(', ')
       : '표시 내용 없음'"
   >
     <div
@@ -110,13 +115,15 @@ watchEffect(async () => {
                   fontSize: l.font_size + 'px', lineHeight: l.font_size + 'px', color: inkVar(l.color) }"
       >{{ l.text }}</div>
 
-      <!-- 편집 필드 — 나눔스퀘어 비례폭, 색은 필드별. -->
-      <div
-        v-for="r in rows" :key="r.f.id"
-        class="row pix"
-        :style="{ left: r.f.x + 'px', top: r.f.y + 'px',
-                  fontSize: r.f.font_size + 'px', lineHeight: r.f.font_size + 'px', color: inkVar(r.f.color) }"
-      >{{ r.text }}</div>
+      <!-- 편집 필드 — 나눔스퀘어 비례폭, 색은 필드별. 멀티라인은 line_h 간격으로 쌓는다. -->
+      <template v-for="r in rows" :key="r.f.id">
+        <div
+          v-for="(ln, i) in r.lines" :key="i"
+          class="row pix"
+          :style="{ left: r.f.x + 'px', top: (r.f.y + i * r.f.line_h) + 'px',
+                    fontSize: r.f.font_size + 'px', lineHeight: r.f.font_size + 'px', color: inkVar(r.f.color) }"
+        >{{ ln }}</div>
+      </template>
 
       <canvas
         v-if="template && qrUrl"

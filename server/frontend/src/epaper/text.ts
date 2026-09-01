@@ -55,6 +55,50 @@ export function clip(text: string, maxW: number, fontPx: number): { text: string
   return { text: out, clipped: false }
 }
 
+/** 멀티라인 배치 — 노드 draw_multiline(인수인계) 과 **같은 규칙**.
+ *
+ *  명시 `\n` 은 강제 줄바꿈으로 유지하고, maxW 폭에서 단어 단위로 흘려 넣는다.
+ *  한 단어가 한 줄보다 길면 글자 단위로 쪼갠다. maxLines 를 넘으면 잘라내고 clipped=true.
+ *  렌더 불가 글자는 clip() 과 같게 버린다.
+ */
+export function wrap(
+  text: string, maxW: number, fontPx: number, maxLines: number,
+): { lines: string[]; clipped: boolean } {
+  const clean = [...text].filter((c) => c === '\n' || isRenderable(c)).join('')
+  const spaceW = advancePx(' ', fontPx)
+  const lines: string[] = []
+  let clipped = false
+
+  for (const para of clean.split('\n')) {
+    let cur = ''
+    let curW = 0
+    for (const word of para.split(' ')) {
+      const ww = measure(word, fontPx)
+      if (ww > maxW) {
+        // 한 줄보다 긴 단어 → 글자 단위로 흘린다.
+        if (cur) { lines.push(cur); cur = ''; curW = 0 }
+        for (const ch of word) {
+          const w = advancePx(ch, fontPx)
+          if (w > maxW) { clipped = true; continue }
+          if (curW + w > maxW) { lines.push(cur); cur = ''; curW = 0 }
+          cur += ch; curW += w
+        }
+      } else {
+        const sep = cur ? spaceW : 0
+        if (curW + sep + ww <= maxW) {
+          cur += (cur ? ' ' : '') + word; curW += sep + ww
+        } else {
+          lines.push(cur); cur = word; curW = ww
+        }
+      }
+    }
+    lines.push(cur)   // 문단 끝(빈 줄도 유지 — \n 보존)
+  }
+
+  if (lines.length > maxLines) { lines.length = maxLines; clipped = true }
+  return { lines, clipped }
+}
+
 /** 서버 max_bytes 검증과 같은 기준(UTF-8 바이트). */
 export function utf8Bytes(text: string): number {
   return new TextEncoder().encode(text).length

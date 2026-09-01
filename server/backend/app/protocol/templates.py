@@ -6,7 +6,8 @@ BLACK, RED, PAPER, NONE = "black", "red", "paper", "none"
 
 @dataclass(frozen=True)
 class FieldDef:
-    """편집 가능한 텍스트 자리. color 는 글자색, w 는 명시 폭(0=QR/캔버스에서 자동)."""
+    """편집 가능한 텍스트 자리. color 는 글자색, w 는 명시 폭(0=QR/캔버스에서 자동),
+    h 는 멀티라인 텍스트영역 높이(0=한 줄)."""
     id: int
     name: str
     x: int
@@ -14,6 +15,7 @@ class FieldDef:
     font_size: int
     color: str = BLACK   # black|red|paper
     w: int = 0           # 명시 폭(px). 0 이면 field_avail_w 가 QR/캔버스로 계산.
+    h: int = 0           # 0=한 줄. >0 이면 폭 w·높이 h 영역에서 줄바꿈(명시 \n + 단어 wrap).
 
 
 @dataclass(frozen=True)
@@ -79,22 +81,25 @@ def box(x, y, w, h, color=RED, sw=6): return Deco(x, y, w, h, stroke=color, stro
 # 3 프로젝트소개(세로). 색: 빨강 밴드/박스/시간강조, 종이(흰) = 밴드 위 제목.
 # 12.48" 1304×984 (세로는 패널을 세워 984×1304). 여백 x=48.
 TEMPLATES: dict[int, TemplateDef] = {
-    # ── 0. 행사 안내 (가로) — 빨강 헤더밴드 + 룰 격자 ──
+    # ── 0. 행사 안내 (가로) — 빨강 헤더밴드 + 룰 격자 + 우측 QR ──
+    # 규격: 여백 48. 밴드 0~200. 콘텐츠(200~984)에 3행 그리드를 상하 대칭 중앙배치
+    # (룰선 360/512/664/816, 피치 152). QR 박스(304)는 그리드에 세로중앙 정렬하고
+    # 우측 여백(오른끝 1256)에 맞춘 뒤, 룰선은 x=904 에서 끊어 48px 거터로 겹침을 없앤다.
     0: TemplateDef(0, "행사 안내", (
-        FieldDef(0, "제목", 48, 100, 72, PAPER),
-        FieldDef(1, "일시", 240, 292, 56),
-        FieldDef(2, "장소", 240, 416, 56),
-        FieldDef(3, "주최", 240, 540, 56),
-    ), QrDef(988, 660, 272), decorations=(
+        FieldDef(0, "제목", 48, 100, 72, PAPER, w=1208),
+        FieldDef(1, "일시", 240, 408, 56, w=664),
+        FieldDef(2, "장소", 240, 560, 56, w=664),
+        FieldDef(3, "주최", 240, 712, 56, w=664),
+    ), QrDef(968, 452, 272), decorations=(
         band(0, 0, 1304, 200),
-        hrule(48, 268, 1208), hrule(48, 392, 1208),
-        hrule(48, 516, 1208), hrule(48, 640, 1208),
-        box(972, 644, 304, 304),
+        hrule(48, 360, 856), hrule(48, 512, 856),
+        hrule(48, 664, 856), hrule(48, 816, 856),
+        box(952, 436, 304, 304),
     ), labels=(
         Label(48, 44, 40, PAPER, "행사 안내"),
-        Label(48, 300, 40, RED, "일시"),
-        Label(48, 424, 40, RED, "장소"),
-        Label(48, 548, 40, RED, "주최"),
+        Label(48, 416, 40, RED, "일시"),
+        Label(48, 568, 40, RED, "장소"),
+        Label(48, 720, 40, RED, "주최"),
     )),
 
     # ── 1. 일정표 (가로) — 격자 시간표 (레퍼런스 방식) ──
@@ -112,36 +117,39 @@ TEMPLATES: dict[int, TemplateDef] = {
         vrule(360, 240, 480), hrule(48, 330, 1208),
         hrule(48, 460, 1208), hrule(48, 590, 1208),
     ), labels=(
-        Label(48, 44, 40, PAPER, "일정표"),
+        Label(48, 64, 72, PAPER, "일정표"),
         Label(84, 262, 40, PAPER, "시간"),
         Label(408, 262, 40, PAPER, "세션"),
     )),
 
-    # ── 2. 프로젝트 소개 (가로) — 분할형(설명 | QR) ──
+    # ── 2. 프로젝트 소개 (가로) — 히어로 밴드 + 넓은 설명 + 우하단 QR (시안 A) ──
+    # 밴드(250) 안: PROJECT 태그·제목·태그라인(모두 종이색). 아래 설명은 멀티라인(40px, h),
+    # QR 은 208 로 작게 우하단(빨강 프레임) — 설명 공간을 넓게(w=920) 확보.
     2: TemplateDef(2, "프로젝트 소개", (
-        FieldDef(0, "프로젝트명", 48, 72, 72, BLACK, w=740),
-        FieldDef(1, "태그라인", 48, 180, 56, RED, w=740),
-        FieldDef(2, "설명", 48, 412, 56, BLACK, w=740),
-    ), QrDef(912, 348, 284), decorations=(
-        vrule(824, 60, 864),
-        hrule(48, 376, 732),
-        box(884, 320, 340, 340),
+        FieldDef(0, "프로젝트명", 48, 104, 72, PAPER, w=1160),
+        FieldDef(1, "태그라인", 48, 196, 40, PAPER, w=1160),
+        FieldDef(2, "설명", 48, 320, 40, BLACK, w=920, h=560),
+    ), QrDef(1032, 600, 208), decorations=(
+        band(0, 0, 1304, 250),
+        box(1016, 584, 240, 240),
     ), labels=(
-        Label(884, 700, 40, RED, "스캔하면 상세 →"),
+        Label(48, 44, 40, PAPER, "PROJECT"),
+        Label(1016, 848, 40, RED, "스캔하면 상세 →"),
     )),
 
-    # ── 3. 프로젝트 소개 (세로) — 포스터형 ──
+    # ── 3. 프로젝트 소개 (세로) — 히어로 밴드 + 큰 설명 + 우하단 작은 QR (시안 A) ──
+    # 밴드(260) 안: 태그·제목·태그라인. 설명은 넓고 크게 멀티라인(폭 888, h=660).
+    # QR 을 448→208 로 줄여 우하단, "스캔하면 상세 →" 는 좌하단 — 설명을 더 많이 쓰게.
     3: TemplateDef(3, "프로젝트 소개(세로)", (
-        FieldDef(0, "프로젝트명", 48, 108, 72, PAPER, w=888),
-        FieldDef(1, "태그라인", 48, 284, 56, RED, w=888),
-        FieldDef(2, "설명", 48, 412, 56, BLACK, w=888),
-    ), QrDef(268, 776, 448), decorations=(
-        band(0, 0, 984, 220),
-        hrule(48, 384, 888),
-        box(252, 760, 480, 480),
+        FieldDef(0, "프로젝트명", 48, 112, 72, PAPER, w=888),
+        FieldDef(1, "태그라인", 48, 204, 40, PAPER, w=888),
+        FieldDef(2, "설명", 48, 320, 40, BLACK, w=888, h=660),
+    ), QrDef(712, 1020, 208), decorations=(
+        band(0, 0, 984, 260),
+        box(696, 1004, 240, 240),
     ), labels=(
         Label(48, 48, 40, PAPER, "PROJECT"),
-        Label(292, 1252, 40, RED, "자세히 보기 →"),
+        Label(48, 1104, 40, RED, "스캔하면 상세 →"),
     ), canvas_w=984, canvas_h=1304),
 }
 
@@ -161,10 +169,21 @@ def field_avail_w(f: FieldDef, qr: QrDef, canvas_w: int) -> int:
     return max(0, right - f.x)
 
 
+def line_h(font_px: int) -> int:
+    """멀티라인 줄 높이(px) — 웹 미리보기·노드 렌더 공용 규칙(1.35배, 정수)."""
+    return font_px * 27 // 20
+
+
+def field_lines(f: FieldDef) -> int:
+    """멀티라인 필드가 담는 최대 줄 수(h=0 이면 1)."""
+    return max(1, f.h // line_h(f.font_size)) if f.h else 1
+
+
 def field_max_bytes(f: FieldDef, qr: QrDef, canvas_w: int) -> int:
-    """화면 폭에서 나오는 UTF-8 최대 바이트 (한글 3B/자, font_px 폭 기준 보수적).
+    """화면 폭×줄수에서 나오는 UTF-8 최대 바이트 (한글 3B/자, font_px 폭 기준 보수적).
     SET_FIELD text 한도 198 로 상한."""
-    return min(198, (field_avail_w(f, qr, canvas_w) // f.font_size) * 3)
+    per_line = field_avail_w(f, qr, canvas_w) // f.font_size
+    return min(198, per_line * field_lines(f) * 3)
 
 
 def as_dict() -> list[dict]:
@@ -175,5 +194,6 @@ def as_dict() -> list[dict]:
         for fd, f in zip(d["fields"], tpl.fields):
             fd["avail_w"] = field_avail_w(f, tpl.qr, tpl.canvas_w)      # 스펙 §6.2
             fd["max_bytes"] = field_max_bytes(f, tpl.qr, tpl.canvas_w)
+            fd["line_h"] = line_h(f.font_size)                          # 멀티라인 줄높이(px)
         out.append(d)
     return out

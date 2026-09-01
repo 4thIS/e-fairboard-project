@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { NodeInfo, Post } from '../api'
 import { errorMessage } from '../api/client'
-import { clip, utf8Bytes } from '../epaper/text'
+import { clip, wrap, utf8Bytes } from '../epaper/text'
 import type { FieldDef } from '../epaper/types'
 import { useDeployments } from '../stores/deployments'
 import { usePosts } from '../stores/posts'
@@ -43,7 +43,7 @@ const template = computed(() =>
 
 /** max_bytes(UTF-8) 초과 입력은 잘라서 거부 — 백엔드 422 이중 방어의 1차 (스펙 §7) */
 function onFieldInput(f: FieldDef, e: Event) {
-  const el = e.target as HTMLInputElement
+  const el = e.target as HTMLInputElement | HTMLTextAreaElement
   let v = el.value
   while (utf8Bytes(v) > f.max_bytes) v = v.slice(0, -1)
   if (v !== el.value) el.value = v
@@ -62,7 +62,14 @@ const clippedIds = computed(() => {
   const t = template.value
   if (!t) return new Set<number>()
   return new Set(t.fields
-    .filter(f => clip(form.fields[String(f.id)] ?? '', f.avail_w, f.font_size).clipped)
+    .filter(f => {
+      const v = form.fields[String(f.id)] ?? ''
+      if (f.h) {
+        const maxLines = Math.max(1, Math.floor(f.h / f.line_h))
+        return wrap(v, f.avail_w, f.font_size, maxLines).clipped
+      }
+      return clip(v, f.avail_w, f.font_size).clipped
+    })
     .map(f => f.id))
 })
 
@@ -110,11 +117,18 @@ async function save() {
 
         <template v-for="f in template?.fields ?? []" :key="f.id">
           <label :for="`f${f.id}`">{{ f.name }}</label>
+          <textarea
+            v-if="f.h"
+            :id="`f${f.id}`" class="input area" :class="{ invalid: clippedIds.has(f.id) }"
+            :rows="Math.max(2, Math.floor(f.h / f.line_h))"
+            :value="form.fields[String(f.id)] ?? ''" @input="onFieldInput(f, $event)"
+          ></textarea>
           <input
+            v-else
             :id="`f${f.id}`" class="input" :class="{ invalid: clippedIds.has(f.id) }"
             :value="form.fields[String(f.id)] ?? ''" @input="onFieldInput(f, $event)"
           />
-          <p v-if="clippedIds.has(f.id)" class="warn" role="alert">⚠ 화면에서 잘립니다 (픽셀 폭 초과)</p>
+          <p v-if="clippedIds.has(f.id)" class="warn" role="alert">⚠ 영역을 넘어 잘립니다 (폭·줄 수 초과)</p>
         </template>
 
         <label for="qr">QR URL</label>
@@ -154,6 +168,7 @@ async function save() {
 .cols { display: flex; gap: 16px; }
 .form { flex: 1; min-width: 0; }
 .side { width: 430px; flex-shrink: 0; }
+.area { resize: vertical; min-height: 72px; font-family: inherit; line-height: 1.45; }
 .warn { color: var(--err); font-size: 11px; margin-top: 2px; }
 .radios { display: flex; gap: 12px; font-size: 12px; }
 .radio { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); margin: 0; }
