@@ -37,10 +37,14 @@ def test_deco_colors_valid():
 
 
 def test_max_bytes_in_range():
+    # 분할 SET_FIELD 로 필드 상한은 FIELD_MAX_TEXT(512). 단일 패킷 필드(h=0)는 여전히 ≤198.
+    from app.protocol.packet import FIELD_MAX_TEXT
     for tpl in TEMPLATES.values():
         for f in tpl.fields:
             mb = field_max_bytes(f, tpl.qr, tpl.canvas_w)
-            assert 0 < mb <= 198, f"{tpl.name}/{f.name} = {mb}"
+            assert 0 < mb <= FIELD_MAX_TEXT, f"{tpl.name}/{f.name} = {mb}"
+            if not f.h:
+                assert mb <= 198, f"단일 필드 {tpl.name}/{f.name} = {mb} > 198"
 
 
 def test_geometry_inside_canvas():

@@ -87,7 +87,7 @@ C 측은 `__attribute__((packed))` 필수 — 패딩이 끼면 배치가 어긋�
 | ACK | ack_seq u8 · result u8 | `<BB` | 2B |
 | STATUS_RES | batt_mV u16 · last_seq u8 · uptime_s u16 · err_cnt u8 | `<HBHB` | 6B |
 | SET_TEMPLATE | template_id u8 | `<B` | 1B |
-| SET_FIELD | field_id u8 · text_len u8 · UTF-8 text(≤198B) | - | 2+nB |
+| SET_FIELD | field_id u8 · text_len u8 · UTF-8 text(**조각** ≤198B) | - | 2+nB |
 | SET_QR | qr_slot u8 · url_len u8 · URL text | - | 2+nB |
 | COMMIT | refresh_mode u8 (0=부분, 1=전체) | `<B` | 1B |
 
@@ -137,15 +137,26 @@ S→Node : COMMIT(refresh_mode)         스테이징 검증        →  ACK(OK) 
 (수 초~수십 초 뒤). 렌더 중 노드는 수신 불가 — 다음 명령이 오면 재전송으로 흡수한다.
 (레퍼런스도 "ACK는 렌더 전"이다.)
 
-## 6. 분할 전송 (FRAG)  〔변경 — MTU 실측·SET_FIELD 로 확대 가능〕
+## 6. 분할 전송 (FRAG)
 
-- FRAG: bit7=LAST, bit0~6=조각 인덱스(0~127). 재조립 키 = (SRC, base_SEQ). 조각마다 stop-and-wait ACK.
-- 전 조각 CRC OK + LAST 수신 → 적용. 누락은 해당 인덱스 재요청.
-- **MTU 실측 필요**: HAT 버퍼는 240B지만 레퍼런스는 안정성을 위해 **22B 청크**로 나눴다. 공중속도
-  2400bps에서 단일 전송의 신뢰 상한을 실측한 뒤:
-  - 상한이 200B 이상이면 §2 그대로(단일 SET_FIELD 가능).
-  - 상한이 그보다 작으면 **FRAG 분할을 이미지(IMG_FRAG)뿐 아니라 SET_FIELD/SET_QR 에도 적용**한다
-    (레퍼런스의 BEGIN/DATA 청크와 같은 역할). 이 경우 §2의 LEN 상한을 MTU에 맞춰 낮춘다.
+우리 링크는 E22 서브패킷 240B 설정이라 **한 패킷(≤209B)은 한 번에** 나간다(레퍼런스의 22B 청크
+제약은 그쪽 설정 얘기 — 우리 병목은 링크 MTU 가 아니라 프로토콜 payload 한도다). 따라서 링크
+계층 청크가 아니라 **프로토콜 계층에서 SET_FIELD 를 여러 개로 쪼갠다.**
+
+**FRAG 바이트:** bit7=LAST, bit0~6=조각 인덱스(0~127). 단일=`0x80`(FRAG_SINGLE = 인덱스0·LAST).
+
+**분할 SET_FIELD (서버 구현됨):**
+- 필드 텍스트를 UTF-8 **글자 경계**에서 조각(≤198B = MAX_PAYLOAD−2)으로 나눈다.
+- 각 조각 = SET_FIELD, payload `[field_id][chunk_len][chunk]`, FRAG = 인덱스 | (0x80 if 마지막).
+- **재조립 키 = (SRC, field_id).** 인덱스0 수신 시 그 필드 버퍼를 비우고 시작 → 조각을 이어붙이고
+  → LAST 수신 시 완성해 스테이징. 조각마다 stop-and-wait ACK(한 번에 하나만 in-flight).
+- 필드 재조립 상한 **`FIELD_MAX_TEXT = 512B`**(≈한글 170자). 초과 요청은 서버 검증이 거절.
+- 조각이 하나면 FRAG=`0x80` → 단일 SET_FIELD 와 동일. **198B 이하 필드는 기존과 완전 호환.**
+- SET_QR 은 분할하지 않는다(URL ≤198B 유지).
+- 전 조각 CRC OK + LAST → 적용. 누락은 stop-and-wait 타임아웃이 그 조각을 재전송.
+
+**노드 재조립 (hm — 미반영):** 노드가 아직 조각을 합치지 않아 >198B 필드는 판넬에서 마지막 조각만
+보인다. `node/HANDOFF_FIELD_FRAGMENT.md` 반영·재플래시 후 완성(≤198B 는 지금도 정상). 값은 준표와 확인.
 
 ## 7. 서버 ↔ HAT 시리얼 (USB)  〔변경 — COBS 제거, 게이트웨이 없음〕
 

@@ -64,3 +64,28 @@ def test_status_res_little_endian():
     payload = build_status_res(batt_mv=3700, last_seq=5, uptime_s=600, err_cnt=1)
     assert payload[0:2] == (3700).to_bytes(2, "little")
     assert parse_status_res(payload) == (3700, 5, 600, 1)
+
+
+def test_set_field_fragments():
+    from app.protocol.packet import build_set_field_fragments, build_set_field, FRAG_SINGLE
+
+    # 짧은 필드 → 조각 하나, FRAG_SINGLE, 단일 build_set_field 와 동일 payload
+    short = build_set_field_fragments(3, "부스")
+    assert len(short) == 1
+    assert short[0][1] == FRAG_SINGLE
+    assert short[0][0] == build_set_field(3, "부스")
+
+    # 긴 필드 → 여러 조각: 인덱스 0..n-1, 마지막만 LAST, chunk_len 정확
+    text = "가나다" * 50  # 450B > 198
+    frags = build_set_field_fragments(2, text)
+    assert len(frags) >= 2
+    for i, (payload, frag) in enumerate(frags):
+        assert payload[0] == 2                                   # field_id
+        assert (frag & 0x7F) == i                                # 인덱스
+        assert bool(frag & 0x80) == (i == len(frags) - 1)        # LAST 는 마지막만
+        assert payload[1] == len(payload) - 2                    # chunk_len
+        payload[2:2 + payload[1]].decode("utf-8")                # 글자 경계 — 단독 디코드 OK
+
+    # 재조립 == 원문
+    joined = b"".join(p[2:2 + p[1]] for p, _ in frags)
+    assert joined.decode("utf-8") == text
