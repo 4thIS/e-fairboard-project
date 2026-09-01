@@ -41,6 +41,43 @@ inline uint16_t rd16(const uint8_t* p) {
     return static_cast<uint16_t>(p[0] | (p[1] << 8));  // 리틀엔디언
 }
 
+// 그 글자의 전진폭. 폰트에 없으면 -1 — draw_utf8 과 같은 취급(자리도 안 준다).
+int16_t advance_of(IGlyphSource& font, uint8_t px, uint32_t cp) {
+    uint8_t bits[MAX_GLYPH_BYTES];
+    uint8_t cell = 0;
+    uint8_t adv = 0;
+    if (!font.glyph(px, cp, bits, cell, adv)) return -1;
+    return adv;
+}
+
+// [begin, end) 를 한 줄로 그린다. draw_utf8 과 같은 규칙(전진폭 기준, max_w 초과분은 잘림).
+void draw_span(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, const char* begin,
+               const char* end, uint8_t px, int16_t max_w, Ink ink) {
+    int16_t pen = 0;
+    uint8_t bits[MAX_GLYPH_BYTES];
+    uint8_t cell = 0;
+    uint8_t advance = 0;
+
+    for (const char* p = begin; p < end;) {
+        uint32_t cp = 0;
+        if (!next_codepoint(p, cp)) break;
+        if (!font.glyph(px, cp, bits, cell, advance)) continue;
+
+        const int16_t w = advance;
+        if (pen + w > max_w) break;
+
+        const uint8_t row_bytes = cell / 8;
+        for (uint8_t gy = 0; gy < cell; ++gy) {
+            for (uint8_t gx = 0; gx < cell; ++gx) {
+                const uint8_t byte = bits[(size_t)gy * row_bytes + (gx >> 3)];
+                if (!(byte & (0x80 >> (gx & 7)))) continue;
+                canvas.pixel(x + pen + gx, y + gy, ink);
+            }
+        }
+        pen += w;
+    }
+}
+
 }  // namespace
 
 bool BakedFont::add(const uint8_t* bin, size_t len) {
@@ -143,6 +180,82 @@ int16_t draw_utf8(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, con
         pen += w;
     }
     return pen;
+}
+
+void draw_multiline(ICanvas& canvas, IGlyphSource& font, int16_t x, int16_t y, const char* utf8,
+                    uint8_t px, int16_t max_w, int16_t max_h, int16_t line_h, Ink ink) {
+    if (!utf8 || px == 0 || max_w <= 0 || line_h <= 0) return;
+    const int16_t max_lines = max_h > 0 ? static_cast<int16_t>(max_h / line_h) : 1;
+    if (max_lines <= 0) return;
+
+    int16_t space_w = advance_of(font, px, 0x20);
+    if (space_w < 0) space_w = 0;
+
+    const char* p = utf8;
+    // 한 바퀴에 정확히 한 줄. 매 바퀴 p 가 반드시 전진하므로 무한루프가 없다.
+    for (int16_t line = 0; line < max_lines && *p; ++line) {
+        const char* begin = p;
+        const char* end = p;  // 확정된 줄 끝
+        int16_t width = 0;
+        bool any = false;
+
+        while (*p && *p != '\n') {
+            // 다음 단어 [w0, w1) 의 폭 — 공백·줄바꿈 앞까지.
+            const char* w0 = p;
+            const char* w1 = w0;
+            int16_t word_w = 0;
+            while (*w1 && *w1 != ' ' && *w1 != '\n') {
+                const char* q = w1;
+                uint32_t cp = 0;
+                if (!next_codepoint(q, cp)) {
+                    w1 = q;
+                    break;
+                }
+                const int16_t a = advance_of(font, px, cp);
+                if (a >= 0) word_w += a;
+                w1 = q;
+            }
+
+            if (!any && word_w > max_w) {
+                // 한 줄보다 긴 단어 — 웹과 같이 글자 단위로 흘린다. 이 줄은 들어가는 데까지.
+                const char* q = w0;
+                int16_t cw = 0;
+                while (q < w1) {
+                    const char* r = q;
+                    uint32_t cp = 0;
+                    if (!next_codepoint(r, cp)) {
+                        q = r;
+                        break;
+                    }
+                    const int16_t a = advance_of(font, px, cp);
+                    if (a < 0 || a > max_w) {  // 없는 글자·한 글자가 줄보다 넓다 — 버린다
+                        q = r;
+                        continue;
+                    }
+                    if (cw + a > max_w) break;
+                    cw += a;
+                    q = r;
+                }
+                if (q == w0) break;  // 한 글자도 못 넣었다 — 진전이 없으니 여기서 끊는다
+                end = q;
+                p = q;
+                any = true;
+                break;  // 이 줄은 여기까지
+            }
+
+            const int16_t sep = any ? space_w : 0;
+            if (any && width + sep + word_w > max_w) break;  // 이 단어는 다음 줄로
+
+            width += sep + word_w;
+            end = w1;
+            any = true;
+            p = w1;
+            if (*p == ' ') ++p;  // 구분 공백은 소비 — '\n'·끝은 위에서 처리된다
+        }
+
+        draw_span(canvas, font, x, y + line * line_h, begin, end, px, max_w, ink);
+        if (*p == '\n') ++p;  // 강제 줄바꿈 소비 (빈 줄도 한 줄로 유지된다)
+    }
 }
 
 }  // namespace node

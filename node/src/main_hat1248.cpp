@@ -172,6 +172,14 @@ public:
             for (uint8_t i = 0; i < tpl->field_count; ++i) {
                 const node::FieldDef& f = tpl->fields[i];
                 if (f.id >= node::MAX_FIELDS || !s.has_field[f.id]) continue;
+                if (f.h > 0) {
+                    // 멀티라인 텍스트영역(설명). line_h 는 서버·웹과 같은 식이어야 줄 수가 맞는다
+                    // — templates.py::line_h == px*27//20.
+                    const int16_t lh = static_cast<int16_t>(f.font_size * 27 / 20);
+                    node::draw_multiline(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, f.w,
+                                         f.h, lh, field_ink(f.color));
+                    continue;
+                }
                 const int16_t avail = node::field_avail_w(f, tpl->qr, tpl->canvas_w);
                 node::draw_utf8(*this, g_font, f.x, f.y, s.fields[f.id], f.font_size, avail,
                                 field_ink(f.color));

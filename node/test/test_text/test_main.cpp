@@ -68,6 +68,39 @@ int16_t width_of(const char* s, uint8_t px) {
     return node::draw_utf8(c, g_font, 0, 0, s, px, Canvas::W);
 }
 
+// 멀티라인은 세로가 길어 Canvas 로는 다 못 담는다 — 어느 y 에 픽셀이 있었는지만 기록한다.
+struct RowCanvas : node::ICanvas {
+    static constexpr int16_t H = 900;
+    bool row[H] = {};
+    int count = 0;
+
+    void pixel(int16_t, int16_t y, node::Ink) override {
+        if (y < 0 || y >= H) return;
+        row[y] = true;
+        ++count;
+    }
+    // 픽셀이 놓인 줄 슬롯(y / line_h)의 개수 = 실제로 그려진 줄 수.
+    int lines_used(int16_t line_h) const {
+        bool slot[64] = {};
+        for (int16_t y = 0; y < H; ++y) {
+            if (!row[y]) continue;
+            const int i = y / line_h;
+            if (i < 64) slot[i] = true;
+        }
+        int n = 0;
+        for (int i = 0; i < 64; ++i)
+            if (slot[i]) ++n;
+        return n;
+    }
+    bool slot_used(int16_t line_h, int i) const {
+        for (int16_t y = 0; y < H; ++y)
+            if (row[y] && y / line_h == i) return true;
+        return false;
+    }
+};
+
+constexpr int16_t LINE_H_40 = 40 * 27 / 20;  // templates.py::line_h 와 같은 식 = 54
+
 }  // namespace
 
 // 폰트 로드는 그 자체가 테스트다 — 실패하면 나머지는 의미가 없어 여기서 멈춘다.
@@ -146,6 +179,69 @@ void test_truncated_utf8_does_not_overrun() {
     TEST_ASSERT_EQUAL_INT16(width_of("A", 72), width_of("A\xED\x95", 72));  // 3바이트 중 2개만
 }
 
+// ── 멀티라인 (HANDOFF_MULTILINE) ────────────────────────────────────────────
+// 줄바꿈 규칙은 웹 text.ts 의 wrap() 과 같아야 한다 — 판넬과 미리보기가 어긋나면 안 된다.
+
+// 폭을 넘으면 공백(단어 경계)에서 넘어간다. 글자 단위로 쪼개면 웹과 줄바꿈이 달라진다.
+void test_multiline_wraps_at_word_boundary() {
+    const int16_t one_word = width_of("가가", 40);
+    RowCanvas c;
+    // 한 단어만 겨우 들어가는 폭 — "가가 나나" 는 두 줄이 되어야 한다.
+    node::draw_multiline(c, g_font, 0, 0, "가가 나나", 40, one_word + 4, 400, LINE_H_40);
+
+    TEST_ASSERT_EQUAL_INT(2, c.lines_used(LINE_H_40));
+    TEST_ASSERT_TRUE(c.slot_used(LINE_H_40, 0));
+    TEST_ASSERT_TRUE(c.slot_used(LINE_H_40, 1));
+}
+
+// 한 줄에 들어가면 줄을 나누지 않는다.
+void test_multiline_keeps_single_line_when_it_fits() {
+    RowCanvas c;
+    node::draw_multiline(c, g_font, 0, 0, "가가 나나", 40, 400, 400, LINE_H_40);
+
+    TEST_ASSERT_EQUAL_INT(1, c.lines_used(LINE_H_40));
+}
+
+// '\n' 은 폭이 남아도 강제로 줄을 넘긴다.
+void test_multiline_honors_explicit_newline() {
+    RowCanvas c;
+    node::draw_multiline(c, g_font, 0, 0, "가\n나", 40, 400, 400, LINE_H_40);
+
+    TEST_ASSERT_EQUAL_INT(2, c.lines_used(LINE_H_40));
+}
+
+// max_h 가 담는 줄 수를 넘으면 나머지는 버린다 — 영역 밖으로 새면 안 된다.
+void test_multiline_clips_beyond_max_h() {
+    RowCanvas c;
+    // 두 줄 높이만 준다 (line_h×2 = 108).
+    node::draw_multiline(c, g_font, 0, 0, "가\n나\n다\n라", 40, 400, LINE_H_40 * 2, LINE_H_40);
+
+    TEST_ASSERT_EQUAL_INT(2, c.lines_used(LINE_H_40));
+    TEST_ASSERT_FALSE(c.slot_used(LINE_H_40, 2));
+}
+
+// 한 줄보다 긴 단어(공백 없음)는 글자 단위로 쪼갠다 — 웹도 같은 예외를 둔다.
+void test_multiline_splits_long_word_by_character() {
+    const int16_t two = width_of("가가", 40);
+    RowCanvas c;
+    node::draw_multiline(c, g_font, 0, 0, "가가가가가가", 40, two + 4, 400, LINE_H_40);
+
+    TEST_ASSERT_GREATER_OR_EQUAL_INT(2, c.lines_used(LINE_H_40));
+}
+
+// 빈 문자열·잘린 UTF-8 에도 그리기만 안 할 뿐 죽지 않는다.
+void test_multiline_handles_empty_and_truncated() {
+    RowCanvas a;
+    node::draw_multiline(a, g_font, 0, 0, "", 40, 400, 400, LINE_H_40);
+    TEST_ASSERT_EQUAL_INT(0, a.count);
+
+    RowCanvas b;
+    // '한'(3바이트) 의 앞 2바이트만 남은 문자열.
+    const char truncated[] = {'A', (char)0xED, (char)0x95, 0};
+    node::draw_multiline(b, g_font, 0, 0, truncated, 40, 400, 400, LINE_H_40);
+    TEST_ASSERT_EQUAL_INT(1, b.lines_used(LINE_H_40));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_font_bins_load);
@@ -158,5 +254,11 @@ int main() {
     RUN_TEST(test_glyph_outside_subset_is_skipped);
     RUN_TEST(test_text_ink_is_passed_through);
     RUN_TEST(test_truncated_utf8_does_not_overrun);
+    RUN_TEST(test_multiline_wraps_at_word_boundary);
+    RUN_TEST(test_multiline_keeps_single_line_when_it_fits);
+    RUN_TEST(test_multiline_honors_explicit_newline);
+    RUN_TEST(test_multiline_clips_beyond_max_h);
+    RUN_TEST(test_multiline_splits_long_word_by_character);
+    RUN_TEST(test_multiline_handles_empty_and_truncated);
     return UNITY_END();
 }
