@@ -2,7 +2,7 @@ import asyncio
 import time
 
 from ..protocol.packet import (
-    BROADCAST, AckResult, MsgType, Packet,
+    BROADCAST, FIELD_MAX_TEXT, AckResult, MsgType, Packet,
     build_ack, build_pong, build_status_res,
 )
 
@@ -27,6 +27,7 @@ class VirtualNode:
         self._last_handled: tuple[int, int] | None = None  # (TYPE, SEQ) 멱등
         self._staged_template: int | None = None
         self._staged_fields: dict[int, str] = {}
+        self._frag_buf: dict[int, bytes] = {}  # 분할 SET_FIELD 재조립 버퍼 (field_id→누적 바이트)
         self._staged_qr: str | None = None
         self._template_id: int | None = None
         self._fields: dict[int, str] = {}
@@ -76,8 +77,16 @@ class VirtualNode:
         if pkt.type == MsgType.SET_TEMPLATE:
             self._staged_template = pkt.payload[0]
         elif pkt.type == MsgType.SET_FIELD:
-            text_len = pkt.payload[1]
-            self._staged_fields[pkt.payload[0]] = pkt.payload[2:2 + text_len].decode("utf-8")
+            # 분할 재조립: frag 인덱스0이면 새로 시작, bit7(LAST)이면 완성 (PROTOCOL.md §3.2).
+            field_id = pkt.payload[0]
+            chunk = pkt.payload[2:2 + pkt.payload[1]]
+            buf = (b"" if (pkt.frag & 0x7F) == 0 else self._frag_buf.get(field_id, b"")) + chunk
+            if len(buf) > FIELD_MAX_TEXT:
+                return AckResult.BAD_TYPE
+            self._frag_buf[field_id] = buf
+            if pkt.frag & 0x80:  # 마지막 조각 — 완성
+                self._staged_fields[field_id] = buf.decode("utf-8")
+                self._frag_buf.pop(field_id, None)
         elif pkt.type == MsgType.SET_QR:
             url_len = pkt.payload[1]
             self._staged_qr = pkt.payload[2:2 + url_len].decode("utf-8")

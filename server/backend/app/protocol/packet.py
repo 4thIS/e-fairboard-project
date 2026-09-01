@@ -8,6 +8,7 @@ GATEWAY_ID = 0x00
 BROADCAST = 0xFF
 FRAG_SINGLE = 0x80  # bit7=LAST, 인덱스 0
 MAX_PAYLOAD = 200
+FIELD_MAX_TEXT = 512  # 분할 SET_FIELD 재조립 최대 바이트. QR 등 단일 필드는 MAX_PAYLOAD-2(198).
 _HEADER_LEN = 7
 _CRC_LEN = 2
 
@@ -83,6 +84,32 @@ def build_set_field(field_id: int, text: str) -> bytes:
     if len(raw) > MAX_PAYLOAD - 2:
         raise PacketError("field text too long")
     return bytes([field_id, len(raw)]) + raw
+
+
+def build_set_field_fragments(field_id: int, text: str) -> list[tuple[bytes, int]]:
+    """긴 필드 텍스트를 여러 SET_FIELD 조각으로 나눈다 (PROTOCOL.md §3.2 분할).
+
+    각 조각 payload = [field_id][chunk_len][chunk], frag = 인덱스 | (0x80 if 마지막).
+    UTF-8 글자 경계에서만 자른다(멀티바이트 중간 분할 금지). 조각이 하나면 frag=FRAG_SINGLE
+    (=인덱스0·LAST) 라 단일 SET_FIELD 와 완전히 동일 — 짧은 필드는 기존과 호환.
+    반환: [(payload, frag), ...].
+    """
+    if len(text.encode("utf-8")) > FIELD_MAX_TEXT:
+        raise PacketError(f"field text > {FIELD_MAX_TEXT}B")
+    chunk_max = MAX_PAYLOAD - 2  # [field_id][chunk_len] 제외
+    chunks: list[bytes] = []
+    cur = b""
+    for ch in text:
+        b = ch.encode("utf-8")
+        if len(cur) + len(b) > chunk_max:
+            chunks.append(cur)
+            cur = b
+        else:
+            cur += b
+    chunks.append(cur)  # 마지막(빈 텍스트면 빈 조각 하나 — 필드 비우기)
+    n = len(chunks)
+    return [(bytes([field_id, len(c)]) + c, i | (0x80 if i == n - 1 else 0))
+            for i, c in enumerate(chunks)]
 
 
 def build_set_qr(url: str, qr_slot: int = 0) -> bytes:

@@ -3,7 +3,8 @@ import asyncio
 from ..transport.base import Transport
 from .framing import FrameAccumulator, encode_frame
 from .packet import (
-    BROADCAST, GATEWAY_ID, AckResult, MsgType, Packet, PacketError, decode, encode, parse_ack,
+    BROADCAST, FRAG_SINGLE, GATEWAY_ID, AckResult, MsgType, Packet, PacketError,
+    decode, encode, parse_ack,
 )
 
 _BUSY_BACKOFF_S = 0.3
@@ -71,10 +72,10 @@ class LinkManager:
             self._inbox.get_nowait()
 
     async def request(self, dst: int, type_: MsgType, payload: bytes = b"", *,
-                      expect: MsgType) -> Packet:
+                      expect: MsgType, frag: int = FRAG_SINGLE) -> Packet:
         async with self._lock:
             seq = self._next_seq()
-            frame = encode_frame(encode(Packet(self._src, dst, type_, seq, payload)))
+            frame = encode_frame(encode(Packet(self._src, dst, type_, seq, payload, frag=frag)))
             timeout = (self._commit_ack_timeout_s if type_ == MsgType.COMMIT
                        else self._ack_timeout_s)
             attempts = 1 + self._retries

@@ -4,7 +4,9 @@ from typing import Literal
 
 from ..models import Deployment, DeployTarget, Post
 from ..protocol.link import LinkError
-from ..protocol.packet import MsgType, build_set_field, build_set_qr
+from ..protocol.packet import (
+    FRAG_SINGLE, MsgType, build_set_field_fragments, build_set_qr,
+)
 from ..simulator.rig import SimRig
 from ..store import Store
 
@@ -13,16 +15,20 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def build_packet_plan(post: Post, refresh_mode: int) -> list[tuple[MsgType, bytes]]:
-    """게시물 → SET_TEMPLATE → SET_FIELD×n → SET_QR? → COMMIT (PROTOCOL.md §4)."""
-    plan: list[tuple[MsgType, bytes]] = [
-        (MsgType.SET_TEMPLATE, bytes([post.template_id]))]
+def build_packet_plan(post: Post, refresh_mode: int) -> list[tuple[MsgType, bytes, int]]:
+    """게시물 → SET_TEMPLATE → SET_FIELD×n → SET_QR? → COMMIT (PROTOCOL.md §4).
+
+    각 스텝은 (타입, payload, frag). 긴 필드는 여러 SET_FIELD 조각으로 전개된다(§3.2 분할) —
+    조각마다 frag(인덱스|LAST). 198B 이하 필드는 조각 하나(FRAG_SINGLE)라 기존과 동일.
+    """
+    plan: list[tuple[MsgType, bytes, int]] = [
+        (MsgType.SET_TEMPLATE, bytes([post.template_id]), FRAG_SINGLE)]
     for field_id in sorted(post.fields, key=int):
-        plan.append((MsgType.SET_FIELD,
-                     build_set_field(int(field_id), post.fields[field_id])))
+        for payload, frag in build_set_field_fragments(int(field_id), post.fields[field_id]):
+            plan.append((MsgType.SET_FIELD, payload, frag))
     if post.qr_url:
-        plan.append((MsgType.SET_QR, build_set_qr(post.qr_url)))
-    plan.append((MsgType.COMMIT, bytes([refresh_mode])))
+        plan.append((MsgType.SET_QR, build_set_qr(post.qr_url), FRAG_SINGLE))
+    plan.append((MsgType.COMMIT, bytes([refresh_mode]), FRAG_SINGLE))
     return plan
 
 
@@ -52,14 +58,14 @@ async def run_deployment(store: Store, rig: SimRig, deployment_id: int) -> None:
         target.status = "sending"
         store.save()
         try:
-            for i, (msg_type, payload) in enumerate(plan, start=1):
+            for i, (msg_type, payload, frag) in enumerate(plan, start=1):
                 target.step_name = msg_type.name
                 target.step_index = i
                 target.step_total = len(plan)
                 target.attempts += 1
                 store.save()  # 1초 폴링이 단계 진행을 보게 한다 (스펙 §6.3)
                 await rig.link.request(target.node_id, msg_type, payload,
-                                       expect=MsgType.ACK)
+                                       expect=MsgType.ACK, frag=frag)
             target.status = "success"
             target.acked_at = _now()
             node = store.state.nodes[target.node_id]

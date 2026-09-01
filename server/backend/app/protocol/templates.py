@@ -1,5 +1,7 @@
 from dataclasses import asdict, dataclass
 
+from .packet import FIELD_MAX_TEXT
+
 # 색 이름 — 3색 e-Paper. paper = 종이(빨강 밴드 위 흰 글자 = 두 플레인 knockout).
 BLACK, RED, PAPER, NONE = "black", "red", "paper", "none"
 
@@ -181,9 +183,9 @@ def field_lines(f: FieldDef) -> int:
 
 def field_max_bytes(f: FieldDef, qr: QrDef, canvas_w: int) -> int:
     """화면 폭×줄수에서 나오는 UTF-8 최대 바이트 (한글 3B/자, font_px 폭 기준 보수적).
-    SET_FIELD text 한도 198 로 상한."""
+    분할 SET_FIELD 재조립 한도 FIELD_MAX_TEXT 로 상한 (198B 초과분은 여러 패킷으로 전송)."""
     per_line = field_avail_w(f, qr, canvas_w) // f.font_size
-    return min(198, per_line * field_lines(f) * 3)
+    return min(FIELD_MAX_TEXT, per_line * field_lines(f) * 3)
 
 
 def as_dict() -> list[dict]:

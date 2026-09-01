@@ -124,3 +124,34 @@ async def test_broadcast_reaches_all_nodes():
     await channel.transmit(Packet(GATEWAY_ID, 0xFF, MsgType.SET_TEMPLATE, 1, b"\x01"))
     acks = [await asyncio.wait_for(gw.inbox.get(), timeout=1.0) for _ in range(2)]
     assert {a.src for a in acks} == {0x01, 0x02}
+
+
+async def test_fragmented_field_reassembles(rig):
+    from app.protocol.packet import build_set_field_fragments
+    channel, node, gw = rig
+    long_text = "가" * 150  # 450B > 198 → 여러 조각
+    frags = build_set_field_fragments(0, long_text)
+    assert len(frags) >= 2  # 실제로 쪼개졌는지
+    await gw.send_and_wait(channel, Packet(GATEWAY_ID, 0x01, MsgType.SET_TEMPLATE, 1, b"\x02"))
+    seq = 10
+    for payload, frag in frags:
+        await gw.send_and_wait(channel, Packet(
+            GATEWAY_ID, 0x01, MsgType.SET_FIELD, seq, payload, frag=frag))
+        seq += 1
+    await gw.send_and_wait(channel, Packet(GATEWAY_ID, 0x01, MsgType.COMMIT, seq, b"\x00"))
+    assert node.display_state["fields"]["0"] == long_text
+
+
+async def test_fragment_retransmit_no_double_append(rig):
+    from app.protocol.packet import build_set_field_fragments
+    channel, node, gw = rig
+    frags = build_set_field_fragments(0, "나" * 100)  # 300B → 2 조각
+    assert len(frags) >= 2
+    await gw.send_and_wait(channel, Packet(GATEWAY_ID, 0x01, MsgType.SET_TEMPLATE, 1, b"\x02"))
+    p0 = Packet(GATEWAY_ID, 0x01, MsgType.SET_FIELD, 10, frags[0][0], frag=frags[0][1])
+    await gw.send_and_wait(channel, p0)
+    await gw.send_and_wait(channel, p0)  # 조각0 재전송 — dedup, 이중 append 없어야
+    p1 = Packet(GATEWAY_ID, 0x01, MsgType.SET_FIELD, 11, frags[1][0], frag=frags[1][1])
+    await gw.send_and_wait(channel, p1)
+    await gw.send_and_wait(channel, Packet(GATEWAY_ID, 0x01, MsgType.COMMIT, 12, b"\x00"))
+    assert node.display_state["fields"]["0"] == "나" * 100
