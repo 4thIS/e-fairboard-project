@@ -146,7 +146,10 @@ S→Node : COMMIT(refresh_mode)         스테이징 검증        →  ACK(OK) 
 **FRAG 바이트:** bit7=LAST, bit0~6=조각 인덱스(0~127). 단일=`0x80`(FRAG_SINGLE = 인덱스0·LAST).
 
 **분할 SET_FIELD (서버 구현됨):**
-- 필드 텍스트를 UTF-8 **글자 경계**에서 조각(≤198B = MAX_PAYLOAD−2)으로 나눈다.
+- 필드 텍스트를 UTF-8 **글자 경계**에서 조각으로 나눈다. 조각 크기 `SET_FIELD_CHUNK`(현재 **64B**).
+  프로토콜 한도는 198B 지만 **실측 제약이 더 빡세다** — 2400bps 에서 큰 패킷(~209B) 왕복 airtime 이
+  ACK 대기(1.5s)를 넘겨 배포가 타임아웃한다(레퍼런스 22B 청크와 같은 이유). 하드웨어 실측으로
+  안전 상한 확인 후 올릴 수 있다.
 - 각 조각 = SET_FIELD, payload `[field_id][chunk_len][chunk]`, FRAG = 인덱스 | (0x80 if 마지막).
 - **재조립 키 = (SRC, field_id).** 인덱스0 수신 시 그 필드 버퍼를 비우고 시작 → 조각을 이어붙이고
   → LAST 수신 시 완성해 스테이징. 조각마다 stop-and-wait ACK(한 번에 하나만 in-flight).
