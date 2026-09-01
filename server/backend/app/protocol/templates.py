@@ -6,7 +6,8 @@ BLACK, RED, PAPER, NONE = "black", "red", "paper", "none"
 
 @dataclass(frozen=True)
 class FieldDef:
-    """편집 가능한 텍스트 자리. color 는 글자색, w 는 명시 폭(0=QR/캔버스에서 자동)."""
+    """편집 가능한 텍스트 자리. color 는 글자색, w 는 명시 폭(0=QR/캔버스에서 자동),
+    h 는 멀티라인 텍스트영역 높이(0=한 줄)."""
     id: int
     name: str
     x: int
@@ -14,6 +15,7 @@ class FieldDef:
     font_size: int
     color: str = BLACK   # black|red|paper
     w: int = 0           # 명시 폭(px). 0 이면 field_avail_w 가 QR/캔버스로 계산.
+    h: int = 0           # 0=한 줄. >0 이면 폭 w·높이 h 영역에서 줄바꿈(명시 \n + 단어 wrap).
 
 
 @dataclass(frozen=True)
@@ -120,34 +122,34 @@ TEMPLATES: dict[int, TemplateDef] = {
         Label(408, 262, 40, PAPER, "세션"),
     )),
 
-    # ── 2. 프로젝트 소개 (가로) — 빨강 밴드 + 분할형(설명 | QR) ──
-    # #0·#1·#3 과 같은 빨강 헤더밴드로 통일(구버전엔 밴드가 없었다). 제목은 밴드 안 종이색 72.
+    # ── 2. 프로젝트 소개 (가로) — 히어로 밴드 + 넓은 설명 + 우하단 QR (시안 A) ──
+    # 밴드(250) 안: PROJECT 태그·제목·태그라인(모두 종이색). 아래 설명은 멀티라인(40px, h),
+    # QR 은 208 로 작게 우하단(빨강 프레임) — 설명 공간을 넓게(w=920) 확보.
     2: TemplateDef(2, "프로젝트 소개", (
-        FieldDef(0, "프로젝트명", 48, 100, 72, PAPER, w=1160),
-        FieldDef(1, "태그라인", 48, 268, 56, RED, w=740),
-        FieldDef(2, "설명", 48, 396, 56, BLACK, w=740),
-    ), QrDef(912, 392, 284), decorations=(
-        band(0, 0, 1304, 200),
-        vrule(824, 260, 664),
-        hrule(48, 360, 740),
-        box(884, 364, 340, 340),
+        FieldDef(0, "프로젝트명", 48, 104, 72, PAPER, w=1160),
+        FieldDef(1, "태그라인", 48, 196, 40, PAPER, w=1160),
+        FieldDef(2, "설명", 48, 320, 40, BLACK, w=920, h=560),
+    ), QrDef(1032, 600, 208), decorations=(
+        band(0, 0, 1304, 250),
+        box(1016, 584, 240, 240),
     ), labels=(
-        Label(48, 44, 40, PAPER, "프로젝트 소개"),
-        Label(884, 728, 40, RED, "스캔하면 상세 →"),
+        Label(48, 44, 40, PAPER, "PROJECT"),
+        Label(1016, 848, 40, RED, "스캔하면 상세 →"),
     )),
 
-    # ── 3. 프로젝트 소개 (세로) — 포스터형 ──
+    # ── 3. 프로젝트 소개 (세로) — 히어로 밴드 + 큰 설명 + 우하단 작은 QR (시안 A) ──
+    # 밴드(260) 안: 태그·제목·태그라인. 설명은 넓고 크게 멀티라인(폭 888, h=660).
+    # QR 을 448→208 로 줄여 우하단, "스캔하면 상세 →" 는 좌하단 — 설명을 더 많이 쓰게.
     3: TemplateDef(3, "프로젝트 소개(세로)", (
-        FieldDef(0, "프로젝트명", 48, 108, 72, PAPER, w=888),
-        FieldDef(1, "태그라인", 48, 284, 56, RED, w=888),
-        FieldDef(2, "설명", 48, 412, 56, BLACK, w=888),
-    ), QrDef(268, 776, 448), decorations=(
-        band(0, 0, 984, 220),
-        hrule(48, 384, 888),
-        box(252, 760, 480, 480),
+        FieldDef(0, "프로젝트명", 48, 112, 72, PAPER, w=888),
+        FieldDef(1, "태그라인", 48, 204, 40, PAPER, w=888),
+        FieldDef(2, "설명", 48, 320, 40, BLACK, w=888, h=660),
+    ), QrDef(712, 1020, 208), decorations=(
+        band(0, 0, 984, 260),
+        box(696, 1004, 240, 240),
     ), labels=(
-        Label(48, 48, 40, PAPER, "프로젝트 소개"),
-        Label(292, 1252, 40, RED, "자세히 보기 →"),
+        Label(48, 48, 40, PAPER, "PROJECT"),
+        Label(48, 1104, 40, RED, "스캔하면 상세 →"),
     ), canvas_w=984, canvas_h=1304),
 }
 
@@ -167,10 +169,21 @@ def field_avail_w(f: FieldDef, qr: QrDef, canvas_w: int) -> int:
     return max(0, right - f.x)
 
 
+def line_h(font_px: int) -> int:
+    """멀티라인 줄 높이(px) — 웹 미리보기·노드 렌더 공용 규칙(1.35배, 정수)."""
+    return font_px * 27 // 20
+
+
+def field_lines(f: FieldDef) -> int:
+    """멀티라인 필드가 담는 최대 줄 수(h=0 이면 1)."""
+    return max(1, f.h // line_h(f.font_size)) if f.h else 1
+
+
 def field_max_bytes(f: FieldDef, qr: QrDef, canvas_w: int) -> int:
-    """화면 폭에서 나오는 UTF-8 최대 바이트 (한글 3B/자, font_px 폭 기준 보수적).
+    """화면 폭×줄수에서 나오는 UTF-8 최대 바이트 (한글 3B/자, font_px 폭 기준 보수적).
     SET_FIELD text 한도 198 로 상한."""
-    return min(198, (field_avail_w(f, qr, canvas_w) // f.font_size) * 3)
+    per_line = field_avail_w(f, qr, canvas_w) // f.font_size
+    return min(198, per_line * field_lines(f) * 3)
 
 
 def as_dict() -> list[dict]:
@@ -181,5 +194,6 @@ def as_dict() -> list[dict]:
         for fd, f in zip(d["fields"], tpl.fields):
             fd["avail_w"] = field_avail_w(f, tpl.qr, tpl.canvas_w)      # 스펙 §6.2
             fd["max_bytes"] = field_max_bytes(f, tpl.qr, tpl.canvas_w)
+            fd["line_h"] = line_h(f.font_size)                          # 멀티라인 줄높이(px)
         out.append(d)
     return out
