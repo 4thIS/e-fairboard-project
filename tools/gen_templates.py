@@ -109,7 +109,10 @@ def render() -> str:
         L.append(f"    // {t.name}")
         L.append(f'    {{{t.id}, "{_c(t.name)}", {len(t.fields)}, {{')
         for f in t.fields:
-            mb = field_max_bytes(f, t.qr, t.canvas_w)
+            # max_bytes 는 uint8_t 필드다. 분할 SET_FIELD 로 필드 상한이 198→512 가 됐지만
+            # 노드는 이 값을 쓰지 않고(순수 메타) 실제 상한은 서버 field_max_bytes 다 →
+            # 헤더는 255 로 클램프해 narrowing 빌드 오류만 피한다.
+            mb = min(255, field_max_bytes(f, t.qr, t.canvas_w))
             L.append(f'        {{{f.id}, "{_c(f.name)}", {f.x}, {f.y}, {f.font_size}, '
                      f'{COLOR[f.color]}, {mb}, {f.w}}},')
         for _ in range(max_fields - len(t.fields)):
