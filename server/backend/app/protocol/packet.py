@@ -9,6 +9,11 @@ BROADCAST = 0xFF
 FRAG_SINGLE = 0x80  # bit7=LAST, 인덱스 0
 MAX_PAYLOAD = 200
 FIELD_MAX_TEXT = 512  # 분할 SET_FIELD 재조립 최대 바이트. QR 등 단일 필드는 MAX_PAYLOAD-2(198).
+# 분할 조각 하나의 텍스트 크기(바이트). 프로토콜 한도는 198 이지만 실측 제약이 더 빡세다:
+# 2400bps 공중속도에서 큰 패킷(~209B) 왕복 airtime 이 ACK 대기(1.5s)를 넘겨 배포가 타임아웃한다
+# (레퍼런스가 22B 청크를 쓴 이유). 64B(≈한글 21자) 는 왕복이 짧아 확실히 ACK 받는다.
+# 하드웨어 실측(준표/효민)으로 안전 상한을 확인하면 올릴 수 있다.
+SET_FIELD_CHUNK = 64
 _HEADER_LEN = 7
 _CRC_LEN = 2
 
@@ -96,7 +101,7 @@ def build_set_field_fragments(field_id: int, text: str) -> list[tuple[bytes, int
     """
     if len(text.encode("utf-8")) > FIELD_MAX_TEXT:
         raise PacketError(f"field text > {FIELD_MAX_TEXT}B")
-    chunk_max = MAX_PAYLOAD - 2  # [field_id][chunk_len] 제외
+    chunk_max = SET_FIELD_CHUNK  # airtime 제약 — 프로토콜 한도(198)보다 작게 (위 상수 주석)
     chunks: list[bytes] = []
     cur = b""
     for ch in text:
