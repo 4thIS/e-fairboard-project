@@ -10,6 +10,8 @@ export interface FieldDef {
   font_size: number   // 40/56/72
   color: Color
   w: number           // 명시 폭(0=자동)
+  h: number           // 멀티라인 텍스트영역 높이(0=한 줄)
+  line_h: number      // 멀티라인 줄 높이(px) — 서버가 계산
   max_bytes: number
   avail_w: number     // 이 행이 쓸 수 있는 가로 폭 — 공식을 프론트에 재구현하지 말 것
 }
