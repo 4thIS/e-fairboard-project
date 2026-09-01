@@ -115,22 +115,25 @@ TEMPLATES: dict[int, TemplateDef] = {
         vrule(360, 240, 480), hrule(48, 330, 1208),
         hrule(48, 460, 1208), hrule(48, 590, 1208),
     ), labels=(
-        Label(48, 44, 40, PAPER, "일정표"),
+        Label(48, 64, 72, PAPER, "일정표"),
         Label(84, 262, 40, PAPER, "시간"),
         Label(408, 262, 40, PAPER, "세션"),
     )),
 
-    # ── 2. 프로젝트 소개 (가로) — 분할형(설명 | QR) ──
+    # ── 2. 프로젝트 소개 (가로) — 빨강 밴드 + 분할형(설명 | QR) ──
+    # #0·#1·#3 과 같은 빨강 헤더밴드로 통일(구버전엔 밴드가 없었다). 제목은 밴드 안 종이색 72.
     2: TemplateDef(2, "프로젝트 소개", (
-        FieldDef(0, "프로젝트명", 48, 72, 72, BLACK, w=740),
-        FieldDef(1, "태그라인", 48, 180, 56, RED, w=740),
-        FieldDef(2, "설명", 48, 412, 56, BLACK, w=740),
-    ), QrDef(912, 348, 284), decorations=(
-        vrule(824, 60, 864),
-        hrule(48, 376, 732),
-        box(884, 320, 340, 340),
+        FieldDef(0, "프로젝트명", 48, 100, 72, PAPER, w=1160),
+        FieldDef(1, "태그라인", 48, 268, 56, RED, w=740),
+        FieldDef(2, "설명", 48, 396, 56, BLACK, w=740),
+    ), QrDef(912, 392, 284), decorations=(
+        band(0, 0, 1304, 200),
+        vrule(824, 260, 664),
+        hrule(48, 360, 740),
+        box(884, 364, 340, 340),
     ), labels=(
-        Label(884, 700, 40, RED, "스캔하면 상세 →"),
+        Label(48, 44, 40, PAPER, "프로젝트 소개"),
+        Label(884, 728, 40, RED, "스캔하면 상세 →"),
     )),
 
     # ── 3. 프로젝트 소개 (세로) — 포스터형 ──
@@ -143,7 +146,7 @@ TEMPLATES: dict[int, TemplateDef] = {
         hrule(48, 384, 888),
         box(252, 760, 480, 480),
     ), labels=(
-        Label(48, 48, 40, PAPER, "PROJECT"),
+        Label(48, 48, 40, PAPER, "프로젝트 소개"),
         Label(292, 1252, 40, RED, "자세히 보기 →"),
     ), canvas_w=984, canvas_h=1304),
 }
